@@ -9,6 +9,7 @@ import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.networktables.NetworkTable;
+import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
@@ -50,6 +51,14 @@ public class Dashboard {
 
     /** Raw NT table backing Elastic's SwerveDrive widget (needs a ".type" marker). */
     private final NetworkTable swerveWidgetTable;
+
+    // Cached entries for the SwerveDrive widget (FL angle, FL vel, FR angle,
+    // FR vel, BL angle, BL vel, BR angle, BR vel, robot angle) - resolving
+    // string-keyed entries on every 20 ms loop is pure waste.
+    private final NetworkTableEntry[] swerveWidgetEntries;
+
+    // Precomputed "Vision/<name> Has Target" keys (avoids per-loop concatenation)
+    private final String[] visionHasTargetKeys;
 
     // ------------------------------------------------------------------
     // AlLow visualization
@@ -115,6 +124,22 @@ public class Dashboard {
         swerveWidgetTable = NetworkTableInstance.getDefault()
             .getTable("SmartDashboard").getSubTable("Swerve Drive");
         swerveWidgetTable.getEntry(".type").setString("SwerveDrive");
+        swerveWidgetEntries = new NetworkTableEntry[] {
+            swerveWidgetTable.getEntry("Front Left Angle"),
+            swerveWidgetTable.getEntry("Front Left Velocity"),
+            swerveWidgetTable.getEntry("Front Right Angle"),
+            swerveWidgetTable.getEntry("Front Right Velocity"),
+            swerveWidgetTable.getEntry("Back Left Angle"),
+            swerveWidgetTable.getEntry("Back Left Velocity"),
+            swerveWidgetTable.getEntry("Back Right Angle"),
+            swerveWidgetTable.getEntry("Back Right Velocity"),
+            swerveWidgetTable.getEntry("Robot Angle"),
+        };
+
+        visionHasTargetKeys = new String[VisionConstants.LIMELIGHT_NAMES.length];
+        for (int i = 0; i < VisionConstants.LIMELIGHT_NAMES.length; i++) {
+            visionHasTargetKeys[i] = "Vision/" + VisionConstants.LIMELIGHT_NAMES[i] + " Has Target";
+        }
     }
 
     /**
@@ -130,17 +155,14 @@ public class Dashboard {
         SmartDashboard.putNumber("Swerve/Heading", driveState.Pose.getRotation().getDegrees());
         SmartDashboard.putBoolean("Swerve/Vision Tracking", swerve.isVisionTrackingEnabled());
 
-        // SwerveDrive widget entries (module order: FL, FR, BL, BR)
+        // SwerveDrive widget entries (module order: FL, FR, BL, BR; entries
+        // cached in the constructor)
         if (driveState.ModuleStates != null && driveState.ModuleStates.length == 4) {
-            swerveWidgetTable.getEntry("Front Left Angle").setDouble(driveState.ModuleStates[0].angle.getRadians());
-            swerveWidgetTable.getEntry("Front Left Velocity").setDouble(driveState.ModuleStates[0].speedMetersPerSecond);
-            swerveWidgetTable.getEntry("Front Right Angle").setDouble(driveState.ModuleStates[1].angle.getRadians());
-            swerveWidgetTable.getEntry("Front Right Velocity").setDouble(driveState.ModuleStates[1].speedMetersPerSecond);
-            swerveWidgetTable.getEntry("Back Left Angle").setDouble(driveState.ModuleStates[2].angle.getRadians());
-            swerveWidgetTable.getEntry("Back Left Velocity").setDouble(driveState.ModuleStates[2].speedMetersPerSecond);
-            swerveWidgetTable.getEntry("Back Right Angle").setDouble(driveState.ModuleStates[3].angle.getRadians());
-            swerveWidgetTable.getEntry("Back Right Velocity").setDouble(driveState.ModuleStates[3].speedMetersPerSecond);
-            swerveWidgetTable.getEntry("Robot Angle").setDouble(driveState.Pose.getRotation().getRadians());
+            for (int i = 0; i < 4; i++) {
+                swerveWidgetEntries[i * 2].setDouble(driveState.ModuleStates[i].angle.getRadians());
+                swerveWidgetEntries[i * 2 + 1].setDouble(driveState.ModuleStates[i].speedMetersPerSecond);
+            }
+            swerveWidgetEntries[8].setDouble(driveState.Pose.getRotation().getRadians());
         }
 
         // --- AlLow visualization ---
@@ -200,8 +222,8 @@ public class Dashboard {
             vision.getBestTarget().map(t -> t.tx).orElse(0.0));
         SmartDashboard.putNumber("Vision/Distance",
             vision.getBestTarget().map(t -> t.groundDistance()).orElse(0.0));
-        for (String name : VisionConstants.LIMELIGHT_NAMES) {
-            SmartDashboard.putBoolean("Vision/" + name + " Has Target", vision.hasTarget(name));
+        for (int i = 0; i < visionHasTargetKeys.length; i++) {
+            SmartDashboard.putBoolean(visionHasTargetKeys[i], vision.hasTarget(i));
         }
 
         // --- Alerts (persistent conditions) ---
