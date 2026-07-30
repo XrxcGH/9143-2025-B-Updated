@@ -196,29 +196,25 @@ public class RobotContainer {
         driver_controller.leftBumper().onTrue(swerve.runOnce(() -> swerve.seedFieldCentric()));
 
         // Toggle vision tracking on Y, but not while back/start are held
-        // (back+Y and start+Y are the SysId test combos above). Only bound
-        // when at least one Limelight is configured: with no cameras the
-        // tracking command would just freeze the drivetrain until toggled
-        // off, so an accidental press must not be able to do that.
+        // (back+Y and start+Y are the SysId test combos above). The toggle
+        // keys off whether the tracking command is actually SCHEDULED, not a
+        // parallel flag - the command's own finallyDo stops the robot and
+        // clears the tracking state whenever it ends, including when another
+        // swerve binding (brake, point, nudges, SysId) interrupts it, so the
+        // toggle can never desync from reality. Only bound when at least one
+        // Limelight is configured: with no cameras the tracking command
+        // would just freeze the drivetrain until toggled off, so an
+        // accidental press must not be able to do that.
         if (VisionConstants.LIMELIGHT_NAMES.length > 0) {
             driver_controller.y()
                 .and(driver_controller.back().negate())
                 .and(driver_controller.start().negate())
                 .onTrue(Commands.runOnce(() -> {
-                boolean newTrackingState = !swerve.isVisionTrackingEnabled();
-                swerve.setVisionTrackingEnabled(newTrackingState);
-
-                if (newTrackingState) {
-                    CommandScheduler.getInstance().schedule(swerve.aprilTagTrackingCommand);
+                if (swerve.aprilTagTrackingCommand.isScheduled()) {
+                    swerve.aprilTagTrackingCommand.cancel();
                 } else {
-                    if (swerve.getCurrentCommand() == swerve.aprilTagTrackingCommand) {
-                        swerve.aprilTagTrackingCommand.cancel();
-                    }
-                    // Stop the robot when tracking is disabled
-                    swerve.setControl(new SwerveRequest.RobotCentric()
-                        .withVelocityX(0)
-                        .withVelocityY(0)
-                        .withRotationalRate(0));
+                    swerve.setVisionTrackingEnabled(true);
+                    CommandScheduler.getInstance().schedule(swerve.aprilTagTrackingCommand);
                 }
             }));
         }
@@ -270,8 +266,12 @@ public class RobotContainer {
             () -> allow.setRollerSpeed(AlLowConstants.ALLOW_ROLLER_INTAKE_SPEED),
             allow::stopRoller, allow));
 
-        // Encoder reset (usable while disabled, with the arm at its stowed position)
-        operator_controller.start().onTrue(
+        // Encoder reset: ONLY while disabled, with the arm at its stowed
+        // position. Zeroing a deployed arm mid-match would silently shift
+        // the soft limits and every preset by the arm's current angle
+        // (resetPivotEncoder drops the closed loop first, so there is no
+        // lunge - but the corrupted reference frame remains).
+        operator_controller.start().and(DriverStation::isDisabled).onTrue(
             Commands.runOnce(allow::resetPivotEncoder, allow).ignoringDisable(true));
 
         // -------- Manual override (default command) --------
