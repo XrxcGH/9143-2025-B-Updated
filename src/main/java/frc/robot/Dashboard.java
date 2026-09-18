@@ -2,8 +2,12 @@ package frc.robot;
 
 import org.littletonrobotics.junction.Logger;
 
+import edu.wpi.first.cameraserver.CameraServer;
+import edu.wpi.first.cscore.HttpCamera;
+import edu.wpi.first.cscore.HttpCamera.HttpCameraKind;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Pose3d;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
@@ -16,6 +20,7 @@ import edu.wpi.first.wpilibj.Alert.AlertType;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
+import edu.wpi.first.wpilibj.smartdashboard.FieldObject2d;
 import edu.wpi.first.wpilibj.smartdashboard.Mechanism2d;
 import edu.wpi.first.wpilibj.smartdashboard.MechanismLigament2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -28,6 +33,7 @@ import frc.robot.Constants.VisionConstants;
 import frc.robot.subsystems.AlLow;
 import frc.robot.subsystems.KitBot;
 import frc.robot.subsystems.Swerve;
+import frc.robot.util.Tunables;
 
 /**
  * Central dashboard manager - the ONLY place in the robot code that
@@ -39,7 +45,12 @@ import frc.robot.subsystems.Swerve;
  * /SmartDashboard, which both Elastic and AdvantageScope read directly
  * (Elastic dropped Shuffleboard API support, so no Shuffleboard calls are
  * used anywhere in this project). Persistent problems surface through
- * WPILib Alerts (Elastic's Alerts widget).
+ * WPILib Alerts (Elastic's Alerts widget). Tunable "magic numbers" are
+ * edited on the Testing tab through WPILib Preferences (see Tunables).
+ *
+ * The Vision/ topics are published whether or not a Limelight is
+ * configured, so the layout's widgets always have a source; with no camera
+ * they simply read "nothing seen" (-1, "", false).
  */
 public class Dashboard {
     private final Swerve swerve;
@@ -59,6 +70,8 @@ public class Dashboard {
 
     // Precomputed "Vision/<name> Has Target" keys (avoids per-loop concatenation)
     private final String[] visionHasTargetKeys;
+    /** Last pose fused from each Limelight, drawn on the Field widget. */
+    private final FieldObject2d[] visionFieldObjects;
 
     // ------------------------------------------------------------------
     // AlLow visualization
@@ -113,10 +126,27 @@ public class Dashboard {
         SmartDashboard.putData("KitBot Subsystem", kitbot);
 
         // --- Pre-match utility button (Command widget) ---
-        // ignoringDisable lets the pit crew zero the arm without enabling.
+        // ignoringDisable lets the pit crew zero the arm without enabling -
+        // and ONLY without enabling: zeroing a deployed arm shifts the soft
+        // limits and every preset by its current angle, so the button does
+        // nothing while the robot is enabled (the same rule as the
+        // operator's Start zeroing binding). The check lives inside a
+        // command with NO requirement, so a click while enabled is fully
+        // inert - requiring the subsystem would interrupt whatever AlLow
+        // command is running (e.g. held rollers). While disabled nothing
+        // else can be running on the subsystem, so none is needed.
         SmartDashboard.putData("Zero AlLow Pivot",
-            Commands.runOnce(allow::resetPivotEncoder, allow)
-                .ignoringDisable(true).withName("Zero AlLow Pivot"));
+            Commands.runOnce(() -> {
+                if (DriverStation.isDisabled()) {
+                    allow.resetPivotEncoder();
+                }
+            }).ignoringDisable(true).withName("Zero AlLow Pivot"));
+
+        // Restores every dashboard-tunable value (Robot Preferences widget)
+        // to its Constants default; usable while disabled.
+        SmartDashboard.putData("Testing/Reset Tunables",
+            Commands.runOnce(Tunables::resetToDefaults)
+                .ignoringDisable(true).withName("Reset Tunables"));
 
         // --- Elastic SwerveDrive widget ---
         // Elastic identifies the widget by a ".type" marker and reads the
@@ -137,8 +167,22 @@ public class Dashboard {
         };
 
         visionHasTargetKeys = new String[VisionConstants.LIMELIGHT_NAMES.length];
+        visionFieldObjects = new FieldObject2d[VisionConstants.LIMELIGHT_NAMES.length];
         for (int i = 0; i < VisionConstants.LIMELIGHT_NAMES.length; i++) {
             visionHasTargetKeys[i] = "Vision/" + VisionConstants.LIMELIGHT_NAMES[i] + " Has Target";
+            visionFieldObjects[i] = field.getObject("Vision " + VisionConstants.LIMELIGHT_NAMES[i]);
+        }
+
+        // --- Limelight camera streams ---
+        // Registers each Limelight's MJPEG stream under /CameraPublisher so
+        // Elastic's Camera Stream widget can display it. The dashboard pulls
+        // video straight from the camera; nothing streams through the roboRIO.
+        // (Nothing is registered while LIMELIGHT_NAMES is empty.)
+        for (String name : VisionConstants.LIMELIGHT_NAMES) {
+            CameraServer.addCamera(new HttpCamera(
+                "limelight-" + name,
+                "http://limelight-" + name + ".local:5800/stream.mjpg",
+                HttpCameraKind.kMJPGStreamer));
         }
     }
 
@@ -147,7 +191,10 @@ public class Dashboard {
      */
     public void update() {
         // --- Field + drivetrain ---
-        var driveState = swerve.getState();
+        // A private snapshot: getState() returns the object the odometry
+        // thread rewrites, so pose/speeds/modules read below would otherwise
+        // come from different odometry ticks
+        var driveState = swerve.getStateCopy();
         field.setRobotPose(driveState.Pose);
 
         SmartDashboard.putNumber("Swerve/Speed",
@@ -191,8 +238,8 @@ public class Dashboard {
         Logger.recordOutput("AlLow/AngleDegrees", armAngleDeg);
         Logger.recordOutput("AlLow/TargetDegrees", allow.getTargetAngle());
         Logger.recordOutput("KitBot/RollerOutput", kitbot.getRollerOutput());
-        Logger.recordOutput("Vision/BestTag",
-            swerve.getVision().getBestTarget().map(t -> t.id).orElse(-1));
+        // (Vision/BestTag and Vision/AlignmentTag are logged in the Vision
+        // section below, beside the dashboard values they mirror.)
 
         // --- Match / robot vitals ---
         SmartDashboard.putNumber("Match Time", DriverStation.getMatchTime());
@@ -205,6 +252,7 @@ public class Dashboard {
         SmartDashboard.putNumber("AlLow/Target", allow.getTargetAngle());
         SmartDashboard.putBoolean("AlLow/At Target", allow.isAtTargetAngle());
         SmartDashboard.putBoolean("AlLow/Manual Mode", allow.isInManualMode());
+        SmartDashboard.putBoolean("AlLow/Holding", allow.isHoldingPosition());
         SmartDashboard.putNumber("AlLow/Pivot Current", allow.getPivotCurrent());
         SmartDashboard.putNumber("AlLow/Roller Current", allow.getRollerCurrent());
         SmartDashboard.putNumber("AlLow/Pivot Output", allow.getPivotOutput());
@@ -214,17 +262,65 @@ public class Dashboard {
         SmartDashboard.putNumber("KitBot/Roller Current", kitbot.getRollerCurrent());
         SmartDashboard.putNumber("KitBot/Roller Output", kitbot.getRollerOutput());
 
-        // --- Vision (inert until a Limelight is configured) ---
+        // --- Vision (every value reads "nothing seen" until a Limelight is configured) ---
+        // What the cameras SEE, unfiltered - the same tags their streams
+        // draw: the closest one ("Best Tag"), which camera has it, and every
+        // ID per camera. These deliberately do NOT come from the alignment
+        // cache below: that cache skips a camera whose lens pose is
+        // unmeasured, every tag outside a camera's alignment class and any
+        // frame without a 3D solve, so a readout built on it can sit still
+        // while a stream plainly shows a tag.
         var vision = swerve.getVision();
-        SmartDashboard.putNumber("Vision/Best Tag",
-            vision.getBestTarget().map(t -> (double) t.id).orElse(-1.0));
+        var seenTag = vision.getClosestSeenTag();
+        SmartDashboard.putNumber("Vision/Best Tag", seenTag.map(t -> (double) t.id).orElse(-1.0));
+        SmartDashboard.putString("Vision/Best Tag Camera",
+            seenTag.map(t -> VisionConstants.LIMELIGHT_NAMES[t.cameraIndex]).orElse(""));
+        SmartDashboard.putString("Vision/Visible Tags", vision.getSeenTagsSummary());
+        // The closest tag a camera may ALIGN on (its class, lens pose
+        // measured), ignoring the alignment class and the latch so the
+        // readouts work with the robot pushed into position while disabled;
+        // positions are in the ROBOT frame. TX, Distance, Lateral and Square
+        // Heading below describe THIS tag, not Best Tag. -1 while Best Tag
+        // shows an ID = that tag is seen but is not one its camera may align on.
+        var bestTarget = vision.getBestVisibleTarget();
+        SmartDashboard.putNumber("Vision/Alignment Tag",
+            bestTarget.map(t -> (double) t.id).orElse(-1.0));
         SmartDashboard.putNumber("Vision/TX",
-            vision.getBestTarget().map(t -> t.tx).orElse(0.0));
+            bestTarget.map(t -> t.tx).orElse(0.0));
+        // Forward distance from the robot center to the tag (negative = behind)
         SmartDashboard.putNumber("Vision/Distance",
-            vision.getBestTarget().map(t -> t.groundDistance()).orElse(0.0));
+            bestTarget.map(t -> t.robotFrame.getX()).orElse(0.0));
+        // Lateral position of the tag (+ = to the robot's left)
+        SmartDashboard.putNumber("Vision/Lateral",
+            bestTarget.map(t -> t.robotFrame.getY()).orElse(0.0));
+        SmartDashboard.putNumber("Vision/Square Heading",
+            bestTarget.flatMap(t -> t.squareHeading).map(Rotation2d::getDegrees).orElse(0.0));
+        Logger.recordOutput("Vision/BestTag", seenTag.map(t -> t.id).orElse(-1));
+        Logger.recordOutput("Vision/AlignmentTag", bestTarget.map(t -> t.id).orElse(-1));
         for (int i = 0; i < visionHasTargetKeys.length; i++) {
             SmartDashboard.putBoolean(visionHasTargetKeys[i], vision.hasTarget(i));
+            // Last pose fused from each camera, drawn on the field beside the
+            // robot; cleared once that camera has not fused for a second
+            final int camera = i;
+            vision.getLastFusedPose(i).ifPresentOrElse(
+                visionFieldObjects[camera]::setPose,
+                () -> visionFieldObjects[camera].setPoses(java.util.List.of()));
         }
+        // What the driver is aligning on (NONE unless an align trigger is held)
+        SmartDashboard.putString("Vision/Alignment Class", vision.getAlignmentClass().name());
+        SmartDashboard.putNumber("Vision/Latched Tag", vision.getLatchedTagId());
+        SmartDashboard.putNumber("Vision/Heading Offset", vision.getLatchedHeadingOffsetDegrees());
+        SmartDashboard.putBoolean("Vision/Heading Seed Fresh", vision.hasFreshHeadingSeed());
+        SmartDashboard.putBoolean("Vision/Reseeding Heading", vision.isReseedingHeading());
+        SmartDashboard.putBoolean("Vision/Auto Kept Heading", swerve.lastAutoResetKeptHeading());
+        // Alignment servo state (robot frame)
+        SmartDashboard.putBoolean("Vision/Target Visible", swerve.isAlignmentTargetVisible());
+        SmartDashboard.putBoolean("Vision/Target From Memory",
+            vision.getBestTarget().map(t -> t.fromMemory).orElse(false));
+        SmartDashboard.putBoolean("Vision/Aligned", swerve.isAligned());
+        SmartDashboard.putNumber("Vision/Forward Error", swerve.getAlignmentForwardError());
+        SmartDashboard.putNumber("Vision/Lateral Error", swerve.getAlignmentLateralError());
+        SmartDashboard.putNumber("Vision/Heading Error", swerve.getAlignmentHeadingErrorDegrees());
 
         // --- Alerts (persistent conditions) ---
         // Resting-voltage check only while disabled - voltage sags under

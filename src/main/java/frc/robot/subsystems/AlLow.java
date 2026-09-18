@@ -38,10 +38,19 @@ import frc.robot.Constants.AlLowConstants;
  *    commands and the manual default command never disturb the hold.
  *  - periodic() re-sends the reference while position control is active so
  *    the gravity term tracks the MEASURED angle through the whole travel,
- *    not the angle the arm had when the target was set.
+ *    not the angle the arm had when the target was set. That is safe
+ *    because this is plain position control: the reference is a number the
+ *    PID compares against, and sending the same number again changes
+ *    nothing. It would NOT be safe under MAXMotion, which restarts its
+ *    motion profile from the measured state on every new setpoint - there a
+ *    setpoint must be sent ONCE per move.
  *  - Manual stick control drives the motor open-loop; the moment the stick
- *    returns to the deadband, the current angle is captured and held under
- *    closed loop, so the arm never goes limp mid-air.
+ *    returns to the deadband the arm is held under closed loop, so it never
+ *    goes limp mid-air. The hold target is where the moving arm can STOP
+ *    (see holdWhereTheArmStops), not the angle it is passing through.
+ *  - The arm is also held where it is every time the robot enables
+ *    (RobotContainer.enabledInit): disabling drops the closed loop, and
+ *    nothing else would pick a deployed arm up again.
  *  - Soft limits on the controller bound travel in every control mode, and
  *    voltage compensation keeps response consistent as the battery sags.
  *
@@ -191,17 +200,32 @@ public class AlLow extends SubsystemBase {
     }
 
     /**
-     * Holds the current angle under closed-loop control. Used when the
-     * operator releases the manual-control stick so the arm does not drop.
+     * Holds the current angle under closed-loop control. For an arm AT REST
+     * (the robot has just enabled); a moving arm is held with
+     * {@link #holdWhereTheArmStops()}.
      */
     public void holdCurrentAngle() {
         setPivotAngle(getPivotAngle());
     }
 
     /**
+     * Holds the angle a MOVING arm can stop at: the measured angle plus the
+     * distance it covers while decelerating to rest over
+     * ALLOW_MANUAL_RELEASE_STOP_SECONDS (velocity x time / 2). Targeting the
+     * measured angle itself would put the target behind the arm the moment
+     * it is set - the arm coasts on, and the loop drags it back: a bob on
+     * every stick release. setPivotAngle clamps the result to the travel
+     * limits.
+     */
+    public void holdWhereTheArmStops() {
+        double stoppingDistance = getPivotVelocity() * AlLowConstants.ALLOW_MANUAL_RELEASE_STOP_SECONDS / 2.0;
+        setPivotAngle(getPivotAngle() + stoppingDistance);
+    }
+
+    /**
      * Direct duty-cycle control from the operator stick. The subsystem
-     * applies the deadband and speed limit, and captures/holds the current
-     * angle the moment the stick returns to center. Soft limits on the
+     * applies the deadband and speed limit, and holds the arm (where it can
+     * stop) the moment the stick returns to center. Soft limits on the
      * controller stop travel at either end of the arm's range.
      */
     public void manualPivotControl(double stickInput) {
@@ -212,9 +236,9 @@ public class AlLow extends SubsystemBase {
             double speed = stickInput * AlLowConstants.ALLOW_MANUAL_SPEED_LIMIT;
             pivotMotor.set(Math.min(Math.max(speed, -1), 1));
         } else if (manualModeEnabled) {
-            // Stick just released - hold the current angle
+            // Stick just released - hold where the still-moving arm can stop
             manualModeEnabled = false;
-            holdCurrentAngle();
+            holdWhereTheArmStops();
         }
         // Otherwise: position control (if active) keeps holding on the motor
         // controller; nothing to do.
@@ -257,6 +281,11 @@ public class AlLow extends SubsystemBase {
         return pivotEncoder.getPosition();
     }
 
+    /** Current arm velocity in degrees per second (+ = deploying). */
+    public double getPivotVelocity() {
+        return pivotEncoder.getVelocity();
+    }
+
     /** The angle in degrees the closed loop is targeting. */
     public double getTargetAngle() {
         return targetAngle;
@@ -268,6 +297,11 @@ public class AlLow extends SubsystemBase {
 
     public boolean isInManualMode() {
         return manualModeEnabled;
+    }
+
+    /** True while the closed loop is holding (or moving to) the target angle; false when the pivot output is cut or under manual control. */
+    public boolean isHoldingPosition() {
+        return positionControlEnabled;
     }
 
     /** Pivot motor output current in amps, for diagnostics. */

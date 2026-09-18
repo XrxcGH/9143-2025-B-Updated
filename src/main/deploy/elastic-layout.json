@@ -66,7 +66,7 @@
             }
           },
           {
-            "title": "Zero AlLow Pivot",
+            "title": "Zero AlLow Pivot (disabled)",
             "x": 0.0,
             "y": 128.0,
             "width": 256.0,
@@ -116,6 +116,74 @@
               "topic": "/SmartDashboard/Auto Mode",
               "period": 0.033,
               "sort_options": false
+            }
+          },
+          {
+            "title": "Best Tag",
+            "x": 384.0,
+            "y": 256.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Best Tag",
+              "period": 0.033,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Align Tag",
+            "x": 512.0,
+            "y": 256.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Alignment Tag",
+              "period": 0.033,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Visible Tags",
+            "x": 640.0,
+            "y": 256.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Visible Tags",
+              "period": 0.033,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Heading (deg)",
+            "x": 384.0,
+            "y": 384.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Swerve/Heading",
+              "period": 0.033,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Heading Seed Fresh",
+            "x": 640.0,
+            "y": 384.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Heading Seed Fresh",
+              "period": 0.033,
+              "true_color": 4283215696,
+              "false_color": 4294198070,
+              "true_icon": "None",
+              "false_icon": "None"
             }
           }
         ]
@@ -185,6 +253,35 @@
             "properties": {
               "topic": "/SmartDashboard/Alerts",
               "period": 0.033
+            }
+          },
+          {
+            "title": "Heading (deg)",
+            "x": 384.0,
+            "y": 512.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Swerve/Heading",
+              "period": 0.033,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Auto Kept Vision Heading",
+            "x": 640.0,
+            "y": 512.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Auto Kept Heading",
+              "period": 0.033,
+              "true_color": 4283215696,
+              "false_color": 4294198070,
+              "true_icon": "None",
+              "false_icon": "None"
             }
           }
         ]
@@ -323,6 +420,80 @@
               "period": 0.033,
               "rotation_turns": 0
             }
+          },
+          {
+            "title": "Vision Tracking",
+            "x": 384.0,
+            "y": 512.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Swerve/Vision Tracking",
+              "period": 0.033,
+              "true_color": 4283215696,
+              "false_color": 4294198070,
+              "true_icon": "None",
+              "false_icon": "None"
+            }
+          },
+          {
+            "title": "Aligned",
+            "x": 640.0,
+            "y": 512.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Aligned",
+              "period": 0.033,
+              "true_color": 4283215696,
+              "false_color": 4294198070,
+              "true_icon": "None",
+              "false_icon": "None"
+            }
+          },
+          {
+            "title": "Aligning On",
+            "x": 896.0,
+            "y": 512.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Alignment Class",
+              "period": 0.033,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Latched Tag",
+            "x": 1024.0,
+            "y": 512.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Latched Tag",
+              "period": 0.033,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "AlLow Holding",
+            "x": 1152.0,
+            "y": 512.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/AlLow/Holding",
+              "period": 0.033,
+              "true_color": 4283215696,
+              "false_color": 4294198070,
+              "true_icon": "None",
+              "false_icon": "None"
+            }
           }
         ]
       }
@@ -427,10 +598,36 @@
             }
           },
           {
-            "title": "Vision Best Tag",
+            "title": "Tunables (saved on robot)",
+            "x": 384.0,
+            "y": 512.0,
+            "width": 512.0,
+            "height": 256.0,
+            "type": "RobotPreferences",
+            "properties": {
+              "topic": "/Preferences",
+              "period": 0.033
+            }
+          },
+          {
+            "title": "Reset Tunables to Defaults",
+            "x": 0.0,
+            "y": 640.0,
+            "width": 384.0,
+            "height": 128.0,
+            "type": "Command",
+            "properties": {
+              "topic": "/SmartDashboard/Testing/Reset Tunables",
+              "period": 0.033,
+              "show_type": false,
+              "maximize_button_space": true
+            }
+          },
+          {
+            "title": "Best Tag",
             "x": 768.0,
             "y": 384.0,
-            "width": 256.0,
+            "width": 128.0,
             "height": 128.0,
             "type": "Text Display",
             "properties": {
@@ -440,16 +637,155 @@
             }
           },
           {
-            "title": "Vision Distance",
+            "title": "Best Tag Camera",
+            "x": 896.0,
+            "y": 384.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Best Tag Camera",
+              "period": 0.033,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Align Tag",
+            "x": 1024.0,
+            "y": 256.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Alignment Tag",
+              "period": 0.033,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Align TX",
+            "x": 1152.0,
+            "y": 256.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/TX",
+              "period": 0.033,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Align Dist (m)",
             "x": 1024.0,
             "y": 384.0,
-            "width": 256.0,
+            "width": 128.0,
             "height": 128.0,
             "type": "Text Display",
             "properties": {
               "topic": "/SmartDashboard/Vision/Distance",
               "period": 0.033,
               "show_submit_button": false
+            }
+          },
+          {
+            "title": "Align Lateral (m)",
+            "x": 1152.0,
+            "y": 384.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Lateral",
+              "period": 0.033,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Forward Error (m)",
+            "x": 896.0,
+            "y": 512.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Forward Error",
+              "period": 0.033,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Lateral Error (m)",
+            "x": 1024.0,
+            "y": 512.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Lateral Error",
+              "period": 0.033,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Heading Error (deg)",
+            "x": 1152.0,
+            "y": 512.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Heading Error",
+              "period": 0.033,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Target Visible",
+            "x": 896.0,
+            "y": 640.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Target Visible",
+              "period": 0.033,
+              "true_color": 4283215696,
+              "false_color": 4294198070,
+              "true_icon": "None",
+              "false_icon": "None"
+            }
+          },
+          {
+            "title": "From Memory",
+            "x": 1024.0,
+            "y": 640.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Target From Memory",
+              "period": 0.033,
+              "true_color": 4283215696,
+              "false_color": 4294198070,
+              "true_icon": "None",
+              "false_icon": "None"
+            }
+          },
+          {
+            "title": "Reseeding Heading",
+            "x": 1152.0,
+            "y": 640.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Vision/Reseeding Heading",
+              "period": 0.033,
+              "true_color": 4283215696,
+              "false_color": 4294198070,
+              "true_icon": "None",
+              "false_icon": "None"
             }
           }
         ]

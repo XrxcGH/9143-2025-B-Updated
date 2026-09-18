@@ -18,38 +18,56 @@ import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
 
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Filesystem;
+import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
+import edu.wpi.first.wpilibj2.command.button.Trigger;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 
 import frc.robot.generated.TunerConstants;
 import frc.robot.Constants.AlLowConstants;
-import frc.robot.Constants.VisionConstants;
+import frc.robot.Constants.DriveConstants;
+import frc.robot.Constants.VisionConstants.TagClass;
 
 import frc.robot.subsystems.Swerve;
 import frc.robot.subsystems.KitBot;
 import frc.robot.subsystems.AlLow;
+import frc.robot.subsystems.Vision;
+import frc.robot.util.Rumble;
+import frc.robot.util.Tunables;
 
 /**
  * RobotContainer owns every subsystem and maps controller inputs to commands.
  * This is the single place to look up "what does this button do".
  *
  * ================================ CONTROLS =================================
+ * Anything that drives the robot by itself is a HOLD, never a toggle; anything
+ * rare or dangerous is Test-mode only, or disabled-only behind a 1 s hold.
+ *
  * DRIVER (port 0):
- *   Left stick          - field-centric translation (forward/strafe)
- *   Right stick X       - rotation
+ *   Left stick          - field-centric translation (scaled by the "Drive -
+ *                         Teleop Speed Scale" tunable, 0.75 by default)
+ *   Right stick X       - rotation (same scale)
  *   A (hold)            - X-lock the wheels (brake)
- *   B (hold)            - point all modules at the left-stick direction
- *   Y (press)           - toggle AprilTag vision tracking (only bound once
- *                         a Limelight is configured in VisionConstants -
- *                         this robot currently has no cameras)
- *   D-pad               - slow robot-centric nudges (up/down/left/right)
- *   Left bumper         - re-zero field-centric heading
- *   Back/Start + X/Y    - SysId characterization routines (test setup only)
+ *   Left bumper         - driver heading zero: the way the robot faces now =
+ *                         stick forward (back+LB also re-seeds the pose heading)
+ *   D-pad               - slow robot-centric nudges, all 8 directions
+ *   B, Back/Start + X/Y - point wheels / SysId: TEST MODE ONLY
+ *
+ *   The next four exist only once a Limelight is configured in
+ *   VisionConstants (this robot currently has no camera, so they are unbound):
+ *   Left trigger (HOLD) - align on the REEF: bumper flush and centered on the
+ *                         face in view, for the KitBot L1 eject; release =
+ *                         sticks back instantly
+ *   Right trigger (HOLD)- align on the CORAL STATION: bumper flush, centered
+ *   Y                   - re-seed the POSE heading from the AprilTags in view
+ *                         (MegaTag1 fused for 2 s); the driver's own "forward"
+ *                         does not move
+ *   Rumble (driver)     - steady while an alignment is held AND aligned
  *
  * OPERATOR (port 1):
  *   Right stick Y       - AlLow pivot manual control (holds angle on release)
@@ -62,14 +80,16 @@ import frc.robot.subsystems.AlLow;
  *   Y                   - KitBot eject stacked piece (timed)
  *   X (hold)            - KitBot re-align piece
  *   A (hold)            - KitBot jog piece
- *   Start               - reset AlLow pivot encoder (works while disabled)
+ *   Start, held 1 s, DISABLED only - zero the AlLow pivot encoder (arm at
+ *                         its stow)
  * ===========================================================================
  */
 public class RobotContainer {
     /** Top speed from swerve characterization, used to scale driver input. */
     private double MaxSpeed = TunerConstants.kSpeedAt12Volts.in(MetersPerSecond);
-    /** Max rotation rate for driver input: 3/4 rotation per second. */
-    private double MaxAngularRate = RotationsPerSecond.of(0.75).in(RadiansPerSecond);
+    /** Rotation rate at full stick and a speed scale of 1.0. */
+    private double MaxAngularRate =
+        RotationsPerSecond.of(DriveConstants.MAX_ANGULAR_RATE_ROTATIONS_PER_SECOND).in(RadiansPerSecond);
 
     // ------------------------------------------------------------------
     // Reusable swerve requests for teleop driving (allocated once)
@@ -77,9 +97,12 @@ public class RobotContainer {
     // NOTE: drive requests use CLOSED-LOOP velocity, not open-loop voltage:
     // every module tracks the true requested ground speed regardless of
     // battery sag, and teleop behavior matches autonomous path following.
-    /** Standard field-centric drive with a 20% stick deadband. */
+    /**
+     * Standard field-centric drive. Speed scaling and the matching deadbands
+     * are applied per loop in the default command (the scale is a dashboard
+     * tunable), so nothing speed-dependent is baked in here.
+     */
     private final SwerveRequest.FieldCentric drive = new SwerveRequest.FieldCentric()
-        .withDeadband(MaxSpeed * 0.2).withRotationalDeadband(MaxAngularRate * 0.2)
         .withDriveRequestType(DriveRequestType.Velocity);
     /** X-locks the wheels to resist being pushed. */
     private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
@@ -95,6 +118,8 @@ public class RobotContainer {
     // Controllers: driver handles the drivetrain, operator handles mechanisms
     private final CommandXboxController driver_controller = new CommandXboxController(0);
     private final CommandXboxController operator_controller = new CommandXboxController(1);
+    /** Haptic cue for the driver: aligned. */
+    private final Rumble driverRumble = new Rumble(driver_controller);
 
     // ------------------------------------------------------------------
     // Subsystems
@@ -108,6 +133,10 @@ public class RobotContainer {
     /** Dashboard chooser for selecting the autonomous routine (logged through
      *  AdvantageKit so every log records which auto was selected). */
     private final LoggedDashboardChooser<Command> autoChooser;
+    /** Raised when PathPlanner could not be configured (no autos will be offered). */
+    private final Alert autoBuilderAlert = new Alert(
+        "PathPlanner AutoBuilder not configured (deploy/pathplanner/settings.json missing or invalid): no autos available",
+        Alert.AlertType.kError);
 
     /** Central dashboard publisher; updated from Robot.robotPeriodic(). */
     private final Dashboard dashboard;
@@ -125,12 +154,23 @@ public class RobotContainer {
         // LoggedDashboardChooser publishes it under SmartDashboard/Auto Mode
         // (Elastic's ComboBox Chooser widget) AND records the selection in
         // the AdvantageKit log.
-        autoChooser = new LoggedDashboardChooser<>("Auto Mode",
-            AutoBuilder.buildAutoChooser("Center Drop"));
+        SendableChooser<Command> chooser;
+        if (AutoBuilder.isConfigured()) {
+            chooser = AutoBuilder.buildAutoChooser("Center Drop");
+        } else {
+            // Swerve.configureAutoBuilder already reported why. buildAutoChooser
+            // would throw here and take the whole robot program down with it.
+            chooser = new SendableChooser<>();
+            chooser.setDefaultOption("None (AutoBuilder not configured)", Commands.none());
+            autoBuilderAlert.set(true);
+        }
+        autoChooser = new LoggedDashboardChooser<>("Auto Mode", chooser);
 
         // Second autonomous option: add every Choreo trajectory from
         // deploy/choreo to the same chooser (see addChoreoAutos).
         addChoreoAutos();
+
+        // (Tunables.init() runs in Robot before this container is built.)
 
         // All dashboard/NetworkTables publishing is centralized here.
         dashboard = new Dashboard(swerve, kitbot, allow);
@@ -149,74 +189,109 @@ public class RobotContainer {
     }
 
     // ==================================================================
-    // Driver bindings (drivetrain)
+    // Driver bindings (drivetrain + align)
     // ==================================================================
+
+    /**
+     * Hold-to-align: selects what to align on (the KitBot has no piece
+     * sensor, so the driver says which - reef or coral station), tracks
+     * while held, and hands the sticks straight back on release (the
+     * tracking command's own finallyDo stops the robot and clears the
+     * tracking state). One new command per binding - a command instance
+     * cannot sit in two compositions.
+     */
+    private Command alignTo(TagClass tagClass) {
+        return Commands.runOnce(() -> {
+                swerve.getVision().setAlignmentClass(tagClass);
+                swerve.setVisionTrackingEnabled(true);
+            })
+            .andThen(swerve.createAprilTagTrackingCommand())
+            .withName("Align " + tagClass);
+    }
+
     private void configureSwerveBindings() {
         // Default command: field-centric driving from the sticks (closed-loop
         // velocity; see the drive request note above).
         // Note that X is defined as forward according to WPILib convention,
         // and Y is defined as to the left according to WPILib convention.
-        // Translation is scaled to 75%; rotation uses the full rate.
         swerve.setDefaultCommand(
-            swerve.applyRequest(() ->
-                drive.withVelocityX(-driver_controller.getLeftY() * MaxSpeed * 0.75) // Forward with negative Y (stick up)
-                    .withVelocityY(-driver_controller.getLeftX() * MaxSpeed * 0.75)  // Left with negative X
-                    .withRotationalRate(-driver_controller.getRightX() * MaxAngularRate) // CCW with negative X (stick left)
-            )
+            swerve.applyRequest(() -> {
+                double scale = Tunables.teleopSpeedScale();
+                double maxSpeed = MaxSpeed * scale;
+                double maxAngularRate = MaxAngularRate * scale;
+                return drive
+                    .withDeadband(maxSpeed * DriveConstants.STICK_DEADBAND)
+                    .withRotationalDeadband(maxAngularRate * DriveConstants.STICK_DEADBAND)
+                    .withVelocityX(-driver_controller.getLeftY() * maxSpeed)  // Forward with negative Y (stick up)
+                    .withVelocityY(-driver_controller.getLeftX() * maxSpeed)  // Left with negative X
+                    .withRotationalRate(-driver_controller.getRightX() * maxAngularRate); // CCW with negative X (stick left)
+            })
         );
 
-        // A: X-lock wheels; B: point modules at the left-stick direction
+        Trigger testMode = new Trigger(DriverStation::isTest);
+
+        // A: X-lock. B (point wheels) and the SysId chords only exist in Test
+        // mode: SysId applies open-loop voltage steps to the drivetrain, and
+        // neither belongs under a thumb during a match. Each SysId routine
+        // should be run exactly once in a single log.
         driver_controller.a().whileTrue(swerve.applyRequest(() -> brake));
-        driver_controller.b().whileTrue(swerve.applyRequest(() ->
-            point.withModuleDirection(new Rotation2d(-driver_controller.getLeftY(), -driver_controller.getLeftX()))
-        ));
+        driver_controller.b().and(testMode).whileTrue(swerve.applyRequest(() ->
+            point.withModuleDirection(new Rotation2d(-driver_controller.getLeftY(), -driver_controller.getLeftX()))));
+        driver_controller.back().and(driver_controller.y()).and(testMode).whileTrue(swerve.sysIdDynamic(Direction.kForward));
+        driver_controller.back().and(driver_controller.x()).and(testMode).whileTrue(swerve.sysIdDynamic(Direction.kReverse));
+        driver_controller.start().and(driver_controller.y()).and(testMode).whileTrue(swerve.sysIdQuasistatic(Direction.kForward));
+        driver_controller.start().and(driver_controller.x()).and(testMode).whileTrue(swerve.sysIdQuasistatic(Direction.kReverse));
 
-        // D-pad: slow robot-centric nudges for lining up on field elements
-        driver_controller.povUp().whileTrue(swerve.applyRequest(() ->
-            forwardStraight.withVelocityX(0.5).withVelocityY(0))
-        );
-        driver_controller.povDown().whileTrue(swerve.applyRequest(() ->
-            forwardStraight.withVelocityX(-0.5).withVelocityY(0))
-        );
-        driver_controller.povLeft().whileTrue(swerve.applyRequest(() ->
-            forwardStraight.withVelocityX(0).withVelocityY(0.5))
-        );
-        driver_controller.povRight().whileTrue(swerve.applyRequest(() ->
-            forwardStraight.withVelocityX(0).withVelocityY(-0.5))
-        );
+        // D-pad nudges in all EIGHT directions from the POV angle, so a thumb
+        // that lands on a diagonal still moves the robot (povUp() and the
+        // other cardinal triggers are true only at exactly their own angle,
+        // so bindings on those alone would ignore a 45-degree press).
+        new Trigger(() -> driver_controller.getHID().getPOV() >= 0).whileTrue(swerve.applyRequest(() -> {
+            double pov = Math.toRadians(driver_controller.getHID().getPOV()); // 0 = up, clockwise
+            double speed = DriveConstants.NUDGE_SPEED_METERS_PER_SECOND;
+            return forwardStraight.withVelocityX(speed * Math.cos(pov)).withVelocityY(-speed * Math.sin(pov));
+        }));
 
-        // Run SysId routines when holding back/start and X/Y.
-        // Note that each routine should be run exactly once in a single log.
-        driver_controller.back().and(driver_controller.y()).whileTrue(swerve.sysIdDynamic(Direction.kForward));
-        driver_controller.back().and(driver_controller.x()).whileTrue(swerve.sysIdDynamic(Direction.kReverse));
-        driver_controller.start().and(driver_controller.y()).whileTrue(swerve.sysIdQuasistatic(Direction.kForward));
-        driver_controller.start().and(driver_controller.x()).whileTrue(swerve.sysIdQuasistatic(Direction.kReverse));
+        // Driver heading zero on left bumper: "the way the robot faces now is
+        // forward on my stick". It only moves the DRIVER's frame (held in the
+        // raw gyro frame - see Swerve.periodic), never the pose estimator's
+        // heading, so it is safe at any time. While DISABLED with no tag
+        // supplying a heading (always the case with no camera mounted) it
+        // also seeds the POSE heading to the alliance's forward direction;
+        // back + left bumper forces that seed.
+        driver_controller.leftBumper().and(driver_controller.back().negate())
+            .onTrue(Commands.runOnce(() -> swerve.zeroDriverHeading(
+                DriverStation.isDisabled() && !swerve.getVision().hasFreshHeadingSeed())).ignoringDisable(true));
+        driver_controller.back().and(driver_controller.leftBumper())
+            .onTrue(Commands.runOnce(() -> swerve.zeroDriverHeading(true)).ignoringDisable(true));
 
-        // Reset the field-centric heading on left bumper press
-        driver_controller.leftBumper().onTrue(swerve.runOnce(() -> swerve.seedFieldCentric()));
+        // Everything that needs a camera is bound only when one is configured.
+        // With LIMELIGHT_NAMES empty the tracking command would find no target
+        // and simply hold the drivetrain stopped for as long as a trigger was
+        // held, so an accidental press must not be able to do that.
+        if (Vision.hasCameras()) {
+            // HOLD a trigger to align; release = sticks. Never a toggle: a
+            // robot that keeps driving itself after the driver has let go is
+            // the failure to avoid.
+            driver_controller.leftTrigger(DriveConstants.ALIGN_TRIGGER_THRESHOLD)
+                .whileTrue(alignTo(TagClass.REEF));
+            driver_controller.rightTrigger(DriveConstants.ALIGN_TRIGGER_THRESHOLD)
+                .whileTrue(alignTo(TagClass.CORAL_STATION));
 
-        // Toggle vision tracking on Y, but not while back/start are held
-        // (back+Y and start+Y are the SysId test combos above). The toggle
-        // keys off whether the tracking command is actually SCHEDULED, not a
-        // parallel flag - the command's own finallyDo stops the robot and
-        // clears the tracking state whenever it ends, including when another
-        // swerve binding (brake, point, nudges, SysId) interrupts it, so the
-        // toggle can never desync from reality. Only bound when at least one
-        // Limelight is configured: with no cameras the tracking command
-        // would just freeze the drivetrain until toggled off, so an
-        // accidental press must not be able to do that.
-        if (VisionConstants.LIMELIGHT_NAMES.length > 0) {
-            driver_controller.y()
-                .and(driver_controller.back().negate())
-                .and(driver_controller.start().negate())
-                .onTrue(Commands.runOnce(() -> {
-                if (swerve.aprilTagTrackingCommand.isScheduled()) {
-                    swerve.aprilTagTrackingCommand.cancel();
-                } else {
-                    swerve.setVisionTrackingEnabled(true);
-                    CommandScheduler.getInstance().schedule(swerve.aprilTagTrackingCommand);
-                }
-            }));
+            // Y: correct the POSE heading from tag geometry. While enabled only
+            // MegaTag2 is fused, and MegaTag2 takes its heading FROM the pose, so
+            // a heading that has drifted (a hard hit, a long match) is never
+            // corrected by it; this fuses MegaTag1, whose solve carries its own
+            // heading, for HEADING_RESEED_WINDOW_SECONDS. With no tag in view it
+            // does nothing. The driver's frame is held in the raw gyro frame, so
+            // "forward" on the stick does not move. (Not in Test mode, where
+            // Back / Start + Y are the SysId bindings.)
+            driver_controller.y().and(testMode.negate())
+                .onTrue(Commands.runOnce(() -> swerve.getVision().requestHeadingReseed()).ignoringDisable(true));
+
+            // Aligned: driver, steady light buzz -> call for the eject.
+            new Trigger(() -> swerve.isVisionTrackingEnabled() && swerve.isAligned())
+                .whileTrue(driverRumble.whileActive(DriveConstants.ALIGNED_RUMBLE_STRENGTH));
         }
 
         // Stream drivetrain state to NetworkTables + SignalLogger for analysis
@@ -266,18 +341,19 @@ public class RobotContainer {
             () -> allow.setRollerSpeed(AlLowConstants.ALLOW_ROLLER_INTAKE_SPEED),
             allow::stopRoller, allow));
 
-        // Encoder reset: ONLY while disabled, with the arm at its stowed
-        // position. Zeroing a deployed arm mid-match would silently shift
-        // the soft limits and every preset by the arm's current angle
-        // (resetPivotEncoder drops the closed loop first, so there is no
-        // lunge - but the corrupted reference frame remains).
-        operator_controller.start().and(DriverStation::isDisabled).onTrue(
-            Commands.runOnce(allow::resetPivotEncoder, allow).ignoringDisable(true));
+        // Encoder zeroing: ONLY while disabled, only after a 1 s hold, with
+        // the arm at its stowed position. Zeroing a deployed arm mid-match
+        // would silently shift the soft limits and every preset by the arm's
+        // current angle (resetPivotEncoder drops the closed loop first, so
+        // there is no lunge - but the corrupted reference frame remains).
+        operator_controller.start().and(DriverStation::isDisabled)
+            .debounce(AlLowConstants.ALLOW_ZERO_HOLD_SECONDS)
+            .onTrue(Commands.runOnce(allow::resetPivotEncoder, allow).ignoringDisable(true));
 
         // -------- Manual override (default command) --------
         // The subsystem applies the deadband and speed limit, and holds the
-        // current angle under closed loop when the stick is released - a
-        // centered stick never fights an active position hold.
+        // arm under closed loop when the stick is released - a centered
+        // stick never fights an active position hold.
         allow.setDefaultCommand(Commands.run(() ->
             allow.manualPivotControl(-operator_controller.getRightY()), allow));
     }
@@ -325,7 +401,8 @@ public class RobotContainer {
 
     /**
      * Builds a standalone auto from a Choreo-sourced path: reset odometry to
-     * the trajectory's starting pose, then follow it. The start pose is
+     * the trajectory's starting pose (keeping a fresh vision heading seed -
+     * see Swerve.resetPoseForAuto), then follow it. The start pose is
      * alliance-flipped to match how AutoBuilder mirrors the path itself on the
      * red alliance, so a Choreo auto lines up correctly on both alliances.
      */
@@ -333,10 +410,23 @@ public class RobotContainer {
         return Commands.sequence(
             Commands.runOnce(() -> {
                 Pose2d start = path.getStartingHolonomicPose().orElse(swerve.getState().Pose);
-                swerve.resetPose(AutoBuilder.shouldFlip() ? FlippingUtil.flipFieldPose(start) : start);
+                swerve.resetPoseForAuto(AutoBuilder.shouldFlip() ? FlippingUtil.flipFieldPose(start) : start);
             }),
             AutoBuilder.followPath(path)
         );
+    }
+
+    /**
+     * Called from Robot.disabledExit(): HOLD the AlLow arm where it is.
+     * Disabling cuts its output and drops the closed loop, and nothing
+     * commands it again until the operator presses something. Without this
+     * hold, an arm that is deployed when the robot enables (after an auto
+     * that ended with it down, say) hangs on the motor's brake mode alone
+     * and sags. The arm is at rest here, so its measured angle is where it
+     * can stop. The KitBot roller has nothing to hold.
+     */
+    public void enabledInit() {
+        allow.holdCurrentAngle();
     }
 
     /** Called from Robot.disabledInit(): stop every mechanism output. */

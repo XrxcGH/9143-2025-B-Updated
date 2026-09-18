@@ -14,6 +14,7 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
 import frc.robot.util.Elastic;
+import frc.robot.util.Tunables;
 
 /**
  * The main robot class, called by WPILib at the appropriate times for each
@@ -60,6 +61,12 @@ public class Robot extends LoggedRobot {
 		// Robot", so every drive station computer gets the same dashboard.
 		WebServer.start(5800, Filesystem.getDeployDirectory().getPath());
 
+		// Seed the dashboard-editable tunables (teleop speed scale, vision
+		// flush distances and tracking gains) with their Constants defaults
+		// if not already stored on the roboRIO - BEFORE the subsystems are
+		// built.
+		Tunables.init();
+
 		m_robotContainer = new RobotContainer();
 
 		// Stream the USB driver camera to the dashboard.
@@ -99,7 +106,10 @@ public class Robot extends LoggedRobot {
 	public void disabledPeriodic() {}
 
 	@Override
-	public void disabledExit() {}
+	public void disabledExit() {
+		// Hold the AlLow arm where it is (see RobotContainer.enabledInit)
+		m_robotContainer.enabledInit();
+	}
 
 	/** Schedules the autonomous routine selected in the dashboard's auto chooser. */
 	@Override
