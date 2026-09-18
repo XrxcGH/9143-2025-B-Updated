@@ -64,7 +64,7 @@ class ControlsBindingTest {
         DriverStationSim.notifyNewData();
     }
 
-    /** Everything released. The simulated POV reads 0 (= UP) until it is set, so centre it. */
+    /** Everything released. The simulated POV reads 0 (= up) until it is set, so center it. */
     private void neutral() {
         for (XboxControllerSim pad : new XboxControllerSim[] {driver, operator}) {
             for (int b = 1; b <= 10; b++) {
@@ -135,7 +135,7 @@ class ControlsBindingTest {
         assertEquals(container.swerve.getDefaultCommand(), driveCommand(), "the stick command owns the drivetrain at rest");
     }
 
-    /** Hold-to-align: a trigger takes the drivetrain only WHILE held - and not at all while no camera is configured. */
+    /** Hold-to-align: a trigger takes the drivetrain only while held - and not at all while no camera is configured. */
     @Test
     void alignTriggersAreHoldsAndExistOnlyWithACamera() {
         Command sticks = container.swerve.getDefaultCommand();

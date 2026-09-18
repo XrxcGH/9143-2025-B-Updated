@@ -36,7 +36,7 @@ import frc.robot.subsystems.Swerve;
 import frc.robot.util.Tunables;
 
 /**
- * Central dashboard manager - the ONLY place in the robot code that
+ * Central dashboard manager - the only place in the robot code that
  * publishes dashboard data. Subsystems expose plain getters and know
  * nothing about the dashboard; update() polls them once per loop from
  * Robot.robotPeriodic().
@@ -50,14 +50,14 @@ import frc.robot.util.Tunables;
  *
  * The Vision/ topics are published whether or not a Limelight is
  * configured, so the layout's widgets always have a source; with no camera
- * they simply read "nothing seen" (-1, "", false).
+ * they read "nothing seen" (-1, "", false).
  */
 public class Dashboard {
     private final Swerve swerve;
     private final KitBot kitbot;
     private final AlLow allow;
 
-    /** Field widget data: robot pose (and any objects added later, e.g. trajectories). */
+    /** Field widget data: robot pose (and any objects added later, for example trajectories). */
     private final Field2d field = new Field2d();
 
     /** Raw NT table backing Elastic's SwerveDrive widget (needs a ".type" marker). */
@@ -88,7 +88,7 @@ public class Dashboard {
     // 3D component pose for AdvantageScope's 3D field view: attach a glTF
     // CAD model and map this entry to the arm component in the 3D config.
     // Robot-relative frame: X forward, Y left, Z up, origin at the robot
-    // center on the floor. Offsets are PLACEHOLDERS - VERIFY against the
+    // center on the floor. Offsets are placeholders - VERIFY against the
     // CAD model's component origin.
     private static final double PIVOT_X_OFFSET = 0.0;  // Meters forward of robot center - VERIFY
     private static final double PIVOT_HEIGHT = 0.25;   // Pivot height above the floor (meters) - VERIFY
@@ -127,13 +127,13 @@ public class Dashboard {
 
         // --- Pre-match utility button (Command widget) ---
         // ignoringDisable lets the pit crew zero the arm without enabling -
-        // and ONLY without enabling: zeroing a deployed arm shifts the soft
+        // and only without enabling: zeroing a deployed arm shifts the soft
         // limits and every preset by its current angle, so the button does
         // nothing while the robot is enabled (the same rule as the
         // operator's Start zeroing binding). The check lives inside a
-        // command with NO requirement, so a click while enabled is fully
+        // command with no requirement, so a click while enabled is fully
         // inert - requiring the subsystem would interrupt whatever AlLow
-        // command is running (e.g. held rollers). While disabled nothing
+        // command is running (for example, held rollers). While disabled nothing
         // else can be running on the subsystem, so none is needed.
         SmartDashboard.putData("Zero AlLow Pivot",
             Commands.runOnce(() -> {
@@ -263,9 +263,9 @@ public class Dashboard {
         SmartDashboard.putNumber("KitBot/Roller Output", kitbot.getRollerOutput());
 
         // --- Vision (every value reads "nothing seen" until a Limelight is configured) ---
-        // What the cameras SEE, unfiltered - the same tags their streams
+        // What the cameras see, unfiltered - the same tags their streams
         // draw: the closest one ("Best Tag"), which camera has it, and every
-        // ID per camera. These deliberately do NOT come from the alignment
+        // ID per camera. These deliberately do not come from the alignment
         // cache below: that cache skips a camera whose lens pose is
         // unmeasured, every tag outside a camera's alignment class and any
         // frame without a 3D solve, so a readout built on it can sit still
@@ -276,11 +276,11 @@ public class Dashboard {
         SmartDashboard.putString("Vision/Best Tag Camera",
             seenTag.map(t -> VisionConstants.LIMELIGHT_NAMES[t.cameraIndex]).orElse(""));
         SmartDashboard.putString("Vision/Visible Tags", vision.getSeenTagsSummary());
-        // The closest tag a camera may ALIGN on (its class, lens pose
+        // The closest tag a camera may align on (its class, lens pose
         // measured), ignoring the alignment class and the latch so the
         // readouts work with the robot pushed into position while disabled;
-        // positions are in the ROBOT frame. TX, Distance, Lateral and Square
-        // Heading below describe THIS tag, not Best Tag. -1 while Best Tag
+        // positions are in the robot frame. TX, Distance, Lateral and Square
+        // Heading below describe this tag, not Best Tag. -1 while Best Tag
         // shows an ID = that tag is seen but is not one its camera may align on.
         var bestTarget = vision.getBestVisibleTarget();
         SmartDashboard.putNumber("Vision/Alignment Tag",

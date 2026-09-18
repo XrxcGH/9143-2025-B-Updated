@@ -33,7 +33,7 @@ public class Telemetry {
 	private final double MaxSpeed;
 
 	/**
-	 * Construct a telemetry object, with the specified max speed of the robot.
+	 * Constructs a telemetry object with the specified max speed of the robot.
 	 * Also starts the CTRE SignalLogger so every status signal on the CAN bus
 	 * is captured to the roboRIO for post-match analysis.
 	 *
@@ -43,7 +43,7 @@ public class Telemetry {
 		MaxSpeed = maxSpeed;
 		SignalLogger.start();
 
-		// Register the module Mechanism2d widgets ONCE. telemeterize() runs
+		// Register the module Mechanism2d widgets once. telemeterize() runs
 		// at the odometry rate (100-250 Hz) on CTRE's odometry thread;
 		// re-registering there means hundreds of synchronized dashboard
 		// lookups and string allocations per second for no benefit.
@@ -52,7 +52,7 @@ public class Telemetry {
 		}
 	}
 
-	// What to publish over networktables for telemetry
+	// What to publish over NetworkTables for telemetry
 	private final NetworkTableInstance inst = NetworkTableInstance.getDefault();
 
 	// Robot swerve drive state
@@ -65,7 +65,7 @@ public class Telemetry {
 	private final DoublePublisher driveTimestamp = driveStateTable.getDoubleTopic("Timestamp").publish();
 	private final DoublePublisher driveOdometryFrequency = driveStateTable.getDoubleTopic("OdometryFrequency").publish();
 
-	// NOTE: the robot pose for dashboards is published as a proper Field2d by
+	// The robot pose for dashboards is published as a proper Field2d by
 	// the Dashboard class; this class only handles logging-oriented output.
 
 	// Mechanisms to represent the swerve module states

@@ -59,7 +59,7 @@ class AlLowManualReleaseSimTest {
 
     /**
      * Releasing the manual stick mid-travel must hold where the moving arm
-     * can STOP - ahead of the angle it was passing through - and the target
+     * can stop - ahead of the angle it was passing through - and the target
      * is set once, not chased: the arm settles on it without being dragged
      * back.
      */

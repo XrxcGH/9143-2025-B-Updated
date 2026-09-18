@@ -16,7 +16,7 @@ import frc.robot.subsystems.AlLow;
 
 /**
  * Exercises the AlLow pivot's desktop physics simulation: commands the
- * intake angle and checks that the simulated closed loop reaches AND HOLDS
+ * intake angle and checks that the simulated closed loop reaches and holds
  * it. The hold assertions are the regression net for the position-hold
  * design (reference latched on the Spark MAX; manual control only takes
  * over outside the stick deadband).
@@ -73,7 +73,7 @@ class AlLowSimTest {
             "Simulated closed loop should reach the commanded angle");
 
         // A centered manual stick (the default command's steady state) must
-        // NOT disturb the hold - this was the original hold-position bug.
+        // not disturb the hold (the failure this test guards against).
         for (int i = 0; i < 250; i++) {
             allow.manualPivotControl(0.0);
             runLoop();

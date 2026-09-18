@@ -18,7 +18,7 @@ import frc.robot.Constants.VisionConstants.TagClass;
 import frc.robot.subsystems.Vision;
 
 /**
- * Pins the camera-space -> robot-frame conversion the alignment tracker
+ * Pins the camera-space to robot-frame conversion the alignment tracker
  * relies on, the field-layout headings it squares up to (against the
  * rotations the authored paths end at), the goals it drives to, the tag
  * classes, and the dashboard's unfiltered "Best Tag" / "Visible Tags"
@@ -40,7 +40,7 @@ class VisionGeometryTest {
 
     @Test
     void offsetYawAndPitchArePlacedOnTheRobot() {
-        // 0.28 m forward, 0.29 m to the robot's LEFT (Limelight side = -0.29),
+        // 0.28 m forward, 0.29 m to the robot's left (Limelight side = -0.29),
         // pitched 20 deg down, yawed 30 deg to the right
         CameraPose cam = new CameraPose(0.28, -0.29, 0.40, 0.0, -20.0, -30.0, true);
         // A tag on the optical axis 2 m away lies 2 cos(20) along the camera heading
@@ -67,14 +67,14 @@ class VisionGeometryTest {
         // further out: behind a rear camera, further behind the robot
         Translation2d lower = Vision.tagPositionInRobotFrame(cam, 0.0, 0.5, 1.0);
         assertTrue(lower.getX() < t.getX(), "a point lower in the image is further behind the up-tilted rear camera");
-        // Camera right is the robot's LEFT for a rear-facing camera
+        // Camera right is the robot's left for a rear-facing camera
         Translation2d right = Vision.tagPositionInRobotFrame(cam, 0.3, 0.0, 1.0);
         assertEquals(0.3, right.getY(), EPS);
     }
 
     /**
      * The approach sides are this robot's mechanism layout: the KitBot
-     * roller ejects out of the REAR, the coral is loaded at the FRONT. The
+     * roller ejects out of the rear, the coral is loaded at the front. The
      * authored autos are the record of that - every reef path ends backed
      * up to its reef face and every station path ends facing the station -
      * so the headings the aligner squares up to must equal the rotations
@@ -133,7 +133,7 @@ class VisionGeometryTest {
         // After the robot drives 0.4 m forward, the remembered tag is 0.6 m ahead
         Pose2d moved = new Pose2d(1.0, 2.4, Rotation2d.fromDegrees(90.0));
         assertEquals(0.6, Vision.fieldToRobotFrame(moved, onField).getX(), EPS);
-        // A tag to the robot's LEFT (+Y) when facing +Y is at smaller field X
+        // A tag to the robot's left (+Y) when facing +Y is at smaller field X
         Translation2d leftOnField = Vision.robotFrameToField(robot, new Translation2d(0.0, 0.5));
         assertEquals(0.5, leftOnField.getX(), EPS);
         assertEquals(2.0, leftOnField.getY(), EPS);
@@ -163,7 +163,7 @@ class VisionGeometryTest {
     }
 
     /**
-     * The dashboard's "Best Tag" is the closest tag ANY camera reports - whatever its class, whichever
+     * The dashboard's "Best Tag" is the closest tag any camera reports - whatever its class, whichever
      * camera, measured pose or not - so it agrees with the camera streams. (The alignment cache filters
      * on all of those, so it cannot feed this readout: a stream would show a tag the widget ignores.)
      */

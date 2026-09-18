@@ -45,7 +45,7 @@ import frc.robot.util.Tunables;
  * This is the single place to look up "what does this button do".
  *
  * ================================ CONTROLS =================================
- * Anything that drives the robot by itself is a HOLD, never a toggle; anything
+ * Anything that drives the robot by itself is a hold, never a toggle; anything
  * rare or dangerous is Test-mode only, or disabled-only behind a 1 s hold.
  *
  * DRIVER (port 0):
@@ -60,14 +60,14 @@ import frc.robot.util.Tunables;
  *
  *   The next four exist only once a Limelight is configured in
  *   VisionConstants (this robot currently has no camera, so they are unbound):
- *   Left trigger (HOLD) - align on the REEF: bumper flush and centered on the
+ *   Left trigger (hold) - align on the reef: bumper flush and centered on the
  *                         face in view, for the KitBot L1 eject; release =
  *                         sticks back instantly
- *   Right trigger (HOLD)- align on the CORAL STATION: bumper flush, centered
- *   Y                   - re-seed the POSE heading from the AprilTags in view
+ *   Right trigger (hold)- align on the coral station: bumper flush, centered
+ *   Y                   - re-seed the pose heading from the AprilTags in view
  *                         (MegaTag1 fused for 2 s); the driver's own "forward"
  *                         does not move
- *   Rumble (driver)     - steady while an alignment is held AND aligned
+ *   Rumble (driver)     - steady while an alignment is held and aligned
  *
  * OPERATOR (port 1):
  *   Right stick Y       - AlLow pivot manual control (holds angle on release)
@@ -94,7 +94,7 @@ public class RobotContainer {
     // ------------------------------------------------------------------
     // Reusable swerve requests for teleop driving (allocated once)
     // ------------------------------------------------------------------
-    // NOTE: drive requests use CLOSED-LOOP velocity, not open-loop voltage:
+    // Drive requests use closed-loop velocity, not open-loop voltage:
     // every module tracks the true requested ground speed regardless of
     // battery sag, and teleop behavior matches autonomous path following.
     /**
@@ -152,7 +152,7 @@ public class RobotContainer {
         // Auto chooser is populated with every auto in deploy/pathplanner/autos.
         // The default must name an auto that actually exists there.
         // LoggedDashboardChooser publishes it under SmartDashboard/Auto Mode
-        // (Elastic's ComboBox Chooser widget) AND records the selection in
+        // (Elastic's ComboBox Chooser widget) and records the selection in
         // the AdvantageKit log.
         SendableChooser<Command> chooser;
         if (AutoBuilder.isConfigured()) {
@@ -212,8 +212,7 @@ public class RobotContainer {
     private void configureSwerveBindings() {
         // Default command: field-centric driving from the sticks (closed-loop
         // velocity; see the drive request note above).
-        // Note that X is defined as forward according to WPILib convention,
-        // and Y is defined as to the left according to WPILib convention.
+        // WPILib convention: X is forward and Y is to the left.
         swerve.setDefaultCommand(
             swerve.applyRequest(() -> {
                 double scale = Tunables.teleopSpeedScale();
@@ -242,7 +241,7 @@ public class RobotContainer {
         driver_controller.start().and(driver_controller.y()).and(testMode).whileTrue(swerve.sysIdQuasistatic(Direction.kForward));
         driver_controller.start().and(driver_controller.x()).and(testMode).whileTrue(swerve.sysIdQuasistatic(Direction.kReverse));
 
-        // D-pad nudges in all EIGHT directions from the POV angle, so a thumb
+        // D-pad nudges in all eight directions from the POV angle, so a thumb
         // that lands on a diagonal still moves the robot (povUp() and the
         // other cardinal triggers are true only at exactly their own angle,
         // so bindings on those alone would ignore a 45-degree press).
@@ -253,11 +252,11 @@ public class RobotContainer {
         }));
 
         // Driver heading zero on left bumper: "the way the robot faces now is
-        // forward on my stick". It only moves the DRIVER's frame (held in the
+        // forward on my stick". It only moves the driver's frame (held in the
         // raw gyro frame - see Swerve.periodic), never the pose estimator's
-        // heading, so it is safe at any time. While DISABLED with no tag
+        // heading, so it is safe at any time. While disabled with no tag
         // supplying a heading (always the case with no camera mounted) it
-        // also seeds the POSE heading to the alliance's forward direction;
+        // also seeds the pose heading to the alliance's forward direction;
         // back + left bumper forces that seed.
         driver_controller.leftBumper().and(driver_controller.back().negate())
             .onTrue(Commands.runOnce(() -> swerve.zeroDriverHeading(
@@ -267,10 +266,10 @@ public class RobotContainer {
 
         // Everything that needs a camera is bound only when one is configured.
         // With LIMELIGHT_NAMES empty the tracking command would find no target
-        // and simply hold the drivetrain stopped for as long as a trigger was
+        // and hold the drivetrain stopped for as long as a trigger was
         // held, so an accidental press must not be able to do that.
         if (Vision.hasCameras()) {
-            // HOLD a trigger to align; release = sticks. Never a toggle: a
+            // Hold a trigger to align; release = sticks. Never a toggle: a
             // robot that keeps driving itself after the driver has let go is
             // the failure to avoid.
             driver_controller.leftTrigger(DriveConstants.ALIGN_TRIGGER_THRESHOLD)
@@ -278,8 +277,8 @@ public class RobotContainer {
             driver_controller.rightTrigger(DriveConstants.ALIGN_TRIGGER_THRESHOLD)
                 .whileTrue(alignTo(TagClass.CORAL_STATION));
 
-            // Y: correct the POSE heading from tag geometry. While enabled only
-            // MegaTag2 is fused, and MegaTag2 takes its heading FROM the pose, so
+            // Y: correct the pose heading from tag geometry. While enabled only
+            // MegaTag2 is fused, and MegaTag2 takes its heading from the pose, so
             // a heading that has drifted (a hard hit, a long match) is never
             // corrected by it; this fuses MegaTag1, whose solve carries its own
             // heading, for HEADING_RESEED_WINDOW_SECONDS. With no tag in view it
@@ -341,7 +340,7 @@ public class RobotContainer {
             () -> allow.setRollerSpeed(AlLowConstants.ALLOW_ROLLER_INTAKE_SPEED),
             allow::stopRoller, allow));
 
-        // Encoder zeroing: ONLY while disabled, only after a 1 s hold, with
+        // Encoder zeroing: only while disabled, only after a 1 s hold, with
         // the arm at its stowed position. Zeroing a deployed arm mid-match
         // would silently shift the soft limits and every preset by the arm's
         // current angle (resetPivotEncoder drops the closed loop first, so
@@ -369,12 +368,12 @@ public class RobotContainer {
     /**
      * Discovers every Choreo trajectory (.traj) in deploy/choreo and adds it
      * to the auto chooser as "Choreo: &lt;name&gt;", so the driver can pick a
-     * PathPlanner auto OR a Choreo trajectory from the same dropdown. Draw a
+     * PathPlanner auto or a Choreo trajectory from the same dropdown. Draw a
      * trajectory in the Choreo app (saving into src/main/deploy/choreo) and it
      * appears here automatically - exactly how PathPlanner autos are picked up
      * from deploy/pathplanner/autos.
      *
-     * The trajectory is followed by the SAME PathPlanner AutoBuilder holonomic
+     * The trajectory is followed by the same PathPlanner AutoBuilder holonomic
      * controller and AutoConstants gains as the PathPlanner autos: PathPlanner
      * 2026 natively loads Choreo .traj files ({@code fromChoreoTrajectory}),
      * and ChoreoLib has no 2026 release, so this keeps a single, already-tuned
@@ -417,7 +416,7 @@ public class RobotContainer {
     }
 
     /**
-     * Called from Robot.disabledExit(): HOLD the AlLow arm where it is.
+     * Called from Robot.disabledExit(): hold the AlLow arm where it is.
      * Disabling cuts its output and drops the closed loop, and nothing
      * commands it again until the operator presses something. Without this
      * hold, an arm that is deployed when the robot enables (after an auto

@@ -23,7 +23,7 @@ import frc.robot.util.Tunables;
  * This project is command-based: almost all robot behavior lives in the
  * subsystems and the command bindings configured in {@link RobotContainer}.
  * This class owns the mode lifecycle - scheduling the selected autonomous
- * command, cancelling it when teleop starts, running the command scheduler
+ * command, canceling it when teleop starts, running the command scheduler
  * every loop - plus the Elastic dashboard plumbing: it serves the layout
  * file to the dashboard, pushes live data every loop, and switches the
  * dashboard to the matching tab whenever the robot changes modes.
@@ -63,7 +63,7 @@ public class Robot extends LoggedRobot {
 
 		// Seed the dashboard-editable tunables (teleop speed scale, vision
 		// flush distances and tracking gains) with their Constants defaults
-		// if not already stored on the roboRIO - BEFORE the subsystems are
+		// if not already stored on the roboRIO - before the subsystems are
 		// built.
 		Tunables.init();
 
@@ -74,7 +74,7 @@ public class Robot extends LoggedRobot {
 
 		// Warm up the PathPlanner path-following code (trajectory generation,
 		// JSON parsing, JIT compilation) while the robot is sitting disabled.
-		// Without this, the FIRST path of autonomous starts with a noticeable
+		// Without this, the first path of autonomous starts with a noticeable
 		// delay/stutter, which shifts the whole routine.
 		CommandScheduler.getInstance().schedule(FollowPathCommand.warmupCommand());
 	}

@@ -31,22 +31,22 @@ import frc.robot.Constants.AlLowConstants;
  *  - The encoder conversion factors scale the NEO's integrated encoder so
  *    every pivot position is in degrees and every velocity in degrees per
  *    second (0 degrees = stowed; the encoder is zeroed there on init).
- *  - Angle moves use closed-loop position control ON the Spark MAX with a
+ *  - Angle moves use closed-loop position control on the Spark MAX with a
  *    sin(angle) gravity feedforward passed as arbitrary feedforward voltage.
  *    The controller latches the reference, so the arm keeps holding its
  *    angle no matter which command is currently scheduled - roller-only
  *    commands and the manual default command never disturb the hold.
  *  - periodic() re-sends the reference while position control is active so
- *    the gravity term tracks the MEASURED angle through the whole travel,
+ *    the gravity term tracks the measured angle through the whole travel,
  *    not the angle the arm had when the target was set. That is safe
  *    because this is plain position control: the reference is a number the
  *    PID compares against, and sending the same number again changes
- *    nothing. It would NOT be safe under MAXMotion, which restarts its
+ *    nothing. It would not be safe under MAXMotion, which restarts its
  *    motion profile from the measured state on every new setpoint - there a
- *    setpoint must be sent ONCE per move.
+ *    setpoint must be sent once per move.
  *  - Manual stick control drives the motor open-loop; the moment the stick
  *    returns to the deadband the arm is held under closed loop, so it never
- *    goes limp mid-air. The hold target is where the moving arm can STOP
+ *    goes limp mid-air. The hold target is where the moving arm can stop
  *    (see holdWhereTheArmStops), not the angle it is passing through.
  *  - The arm is also held where it is every time the robot enables
  *    (RobotContainer.enabledInit): disabling drops the closed loop, and
@@ -77,7 +77,7 @@ public class AlLow extends SubsystemBase {
     // Desktop simulation (only constructed when running off-robot). The
     // physics model exists purely so the mechanism moves in the sim GUI /
     // AdvantageScope; the values below affect simulation fidelity only.
-    // Gravity is NOT simulated because the arm's zero is vertical, not
+    // Gravity is not simulated because the arm's zero is vertical, not
     // horizontal (matching kG = 0 until tuned) - enable both together once
     // the mounting orientation is verified.
     // ------------------------------------------------------------------
@@ -135,7 +135,7 @@ public class AlLow extends SubsystemBase {
             .velocityConversionFactor(AlLowConstants.ALLOW_PIVOT_VELOCITY_CONVERSION);
 
         // Closed-loop PID gains (slot 0). Error units are degrees after the
-        // conversion factors above. Gravity compensation is NOT configured
+        // conversion factors above. Gravity compensation is not configured
         // here - it is angle-dependent, so it is passed per-cycle as
         // arbitrary feedforward in setSetpoint().
         pivotConfig.closedLoop
@@ -174,7 +174,7 @@ public class AlLow extends SubsystemBase {
     }
 
     // Sends the latched target to the controller with gravity compensation
-    // evaluated at the arm's MEASURED angle.
+    // evaluated at the arm's measured angle.
     private void applyPositionReference() {
         pivotController.setSetpoint(
             targetAngle,
@@ -200,7 +200,7 @@ public class AlLow extends SubsystemBase {
     }
 
     /**
-     * Holds the current angle under closed-loop control. For an arm AT REST
+     * Holds the current angle under closed-loop control. For an arm at rest
      * (the robot has just enabled); a moving arm is held with
      * {@link #holdWhereTheArmStops()}.
      */
@@ -209,7 +209,7 @@ public class AlLow extends SubsystemBase {
     }
 
     /**
-     * Holds the angle a MOVING arm can stop at: the measured angle plus the
+     * Holds the angle a moving arm can stop at: the measured angle plus the
      * distance it covers while decelerating to rest over
      * ALLOW_MANUAL_RELEASE_STOP_SECONDS (velocity x time / 2). Targeting the
      * measured angle itself would put the target behind the arm the moment
@@ -236,7 +236,7 @@ public class AlLow extends SubsystemBase {
             double speed = stickInput * AlLowConstants.ALLOW_MANUAL_SPEED_LIMIT;
             pivotMotor.set(Math.min(Math.max(speed, -1), 1));
         } else if (manualModeEnabled) {
-            // Stick just released - hold where the still-moving arm can stop
+            // Stick released this loop - hold where the still-moving arm can stop
             manualModeEnabled = false;
             holdWhereTheArmStops();
         }

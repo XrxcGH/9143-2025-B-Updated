@@ -8,18 +8,18 @@ import frc.robot.Constants.VisionConstants;
 /**
  * Live-tunable "magic numbers", backed by WPILib {@link Preferences}.
  *
- * Every value here can be edited from the dashboard WITHOUT changing or
+ * Every value here can be edited from the dashboard without changing or
  * redeploying code: Preferences live in NetworkTables under /Preferences,
  * Elastic's "Robot Preferences" widget (Testing tab) edits them in place, and
  * the roboRIO persists them to /home/lvuser/networktables.json - so an edit
- * survives reboots, power cycles, AND future code deploys (a deploy never
+ * survives reboots, power cycles, and future code deploys (a deploy never
  * touches that file). The values in Constants are only the factory defaults,
  * seeded the first time the code runs (or after "Reset Tunables").
  *
  * What belongs here: numbers that get dialed in on the practice field with
  * the robot in front of you - the teleop speed scale, the two flush
  * distances the alignment drives to, and the alignment servo's gains.
- * What does NOT belong here: the AlLow pivot's Spark MAX gains and preset
+ * What does not belong here: the AlLow pivot's Spark MAX gains and preset
  * angles. They are written to the controller once at boot and tuned live in
  * the REV Hardware Client, then copied into Constants; and the AlLow
  * conversion factor is a physical fact to VERIFY, not a knob.
@@ -44,13 +44,13 @@ public final class Tunables {
 
     /**
      * Version stamp of the factory defaults in Constants. Stored values
-     * survive deploys, so changing a default in Constants does NOTHING on a
+     * survive deploys, so changing a default in Constants does nothing on a
      * robot that already has the key stored - unless this number is bumped.
      * On the first boot after a bump, init() does one of two things:
      *   - if it has a targeted migration block for the stored version, it
-     *     overwrites ONLY the keys named there and keeps everything else
+     *     overwrites only the keys named there and keeps everything else
      *     the team has tuned on the dashboard;
-     *   - otherwise it overwrites EVERY tunable with the new defaults.
+     *   - otherwise it overwrites every tunable with the new defaults.
      * Bump it when a default changes and must take effect on the robot
      * (and add a migration block when only a few defaults moved); leave it
      * alone to preserve values tuned on the dashboard.
@@ -65,11 +65,11 @@ public final class Tunables {
      * {@link #DEFAULTS_VERSION} has been bumped since the last boot it
      * instead runs the targeted migration for the stored version or, if
      * there is none, overwrites every key. Call once at robot startup,
-     * BEFORE the subsystems are constructed.
+     * before the subsystems are constructed.
      */
     public static void init() {
-        // A TARGETED migration goes here, before the version check, when a
-        // bump moves only a few defaults - it overwrites just those keys and
+        // A targeted migration goes here, before the version check, when a
+        // bump moves only a few defaults - it overwrites only those keys and
         // stamps the new version, so everything else tuned on the dashboard
         // survives. The shape, for a bump from 1 to 2 that only moves the
         // reef flush distance:
@@ -133,16 +133,16 @@ public final class Tunables {
     }
 
     // ------------------------------------------------------------------
-    // Vision alignment goals (meters, ROBOT frame: how far the tag sits
+    // Vision alignment goals (meters, robot frame: how far the tag sits
     // from the robot center with the bumper flush)
     // ------------------------------------------------------------------
 
-    /** Distance from the robot center to a reef tag with the REAR bumper flush on the reef base. */
+    /** Distance from the robot center to a reef tag with the rear bumper flush on the reef base. */
     public static double reefFlushDistance() {
         return clampedMagnitude(REEF_FLUSH_DISTANCE, VisionConstants.REEF_FLUSH_DISTANCE, 0.3, 2.0);
     }
 
-    /** Distance from the robot center to a coral-station tag with the FRONT bumper flush on the station wall. */
+    /** Distance from the robot center to a coral-station tag with the front bumper flush on the station wall. */
     public static double stationFlushDistance() {
         return clampedMagnitude(STATION_FLUSH_DISTANCE, VisionConstants.STATION_FLUSH_DISTANCE, 0.3, 2.0);
     }
@@ -151,13 +151,13 @@ public final class Tunables {
     // Vision tracking gains
     // ------------------------------------------------------------------
 
-    /** m/s of drive command per meter of position error, clamped to 0 - 3x the default. */
+    /** m/s of drive command per meter of position error, clamped to 0 to 3x the default. */
     public static double trackingDistanceKp() {
         return clamped(TRACKING_DISTANCE_KP, VisionConstants.TrackingGains.DISTANCE_kP,
             0.0, 3.0 * VisionConstants.TrackingGains.DISTANCE_kP);
     }
 
-    /** rad/s of rotation command per degree of angle error, clamped to 0 - 3x the default. */
+    /** rad/s of rotation command per degree of angle error, clamped to 0 to 3x the default. */
     public static double trackingRotationKp() {
         return clamped(TRACKING_ROTATION_KP, VisionConstants.TrackingGains.ROTATION_kP,
             0.0, 3.0 * VisionConstants.TrackingGains.ROTATION_kP);
