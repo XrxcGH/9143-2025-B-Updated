@@ -4,6 +4,8 @@ This repository contains the code for Team 9143's second 2025 FRC (Reefscape) ro
 
 The drivetrain, vision and alignment code is the [A robot's](https://github.com/XrxcGH/9143-2025-A-Updated) (same chassis), where it has been run on the real robot. **On this robot it has not**: there is no Limelight mounted, so the whole vision stack is inert, and everything that still needs the robot is collected in the [Pre-Competition Checklist](#pre-competition-checklist).
 
+**Latest release:** [v1.0](https://github.com/XrxcGH/9143-2025-B-Updated/releases/tag/v1.0) — release notes and source archives; all releases are on the [Releases page](https://github.com/XrxcGH/9143-2025-B-Updated/releases).
+
 ---
 
 ## Robot Overview
