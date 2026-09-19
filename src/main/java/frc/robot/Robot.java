@@ -38,129 +38,129 @@ import frc.robot.util.Tunables;
  * Phoenix signals and SysId.
  */
 public class Robot extends LoggedRobot {
-	/** The autonomous command selected on the dashboard, scheduled in autonomousInit(). */
-	private Command m_autonomousCommand;
+    /** The autonomous command selected on the dashboard, scheduled in autonomousInit(). */
+    private Command m_autonomousCommand;
 
-	/** Container that owns all subsystems and controller bindings. */
-	private final RobotContainer m_robotContainer;
+    /** Container that owns all subsystems and controller bindings. */
+    private final RobotContainer m_robotContainer;
 
-	public Robot() {
-		// ---- AdvantageKit logger ----
-		// Metadata shows up in AdvantageScope's metadata tab for every log.
-		Logger.recordMetadata("ProjectName", DashboardConstants.LOG_PROJECT_NAME);
-		Logger.recordMetadata("Robot", DashboardConstants.LOG_ROBOT_NAME);
-		// .wpilog files: to a USB stick (/U/logs) when one is plugged into
-		// the roboRIO, otherwise /home/lvuser/logs; in simulation, ./logs.
-		Logger.addDataReceiver(new WPILOGWriter());
-		// Live stream for AdvantageScope's "Connect to Robot" (RLOG), on a
-		// port clear of the layout server's.
-		Logger.addDataReceiver(new RLOGServer(DashboardConstants.RLOG_PORT));
-		Logger.start();
+    public Robot() {
+        // ---- AdvantageKit logger ----
+        // Metadata shows up in AdvantageScope's metadata tab for every log.
+        Logger.recordMetadata("ProjectName", DashboardConstants.LOG_PROJECT_NAME);
+        Logger.recordMetadata("Robot", DashboardConstants.LOG_ROBOT_NAME);
+        // .wpilog files: to a USB stick (/U/logs) when one is plugged into
+        // the roboRIO, otherwise /home/lvuser/logs; in simulation, ./logs.
+        Logger.addDataReceiver(new WPILOGWriter());
+        // Live stream for AdvantageScope's "Connect to Robot" (RLOG), on a
+        // port clear of the layout server's.
+        Logger.addDataReceiver(new RLOGServer(DashboardConstants.RLOG_PORT));
+        Logger.start();
 
-		// Serve the deploy directory over HTTP. Elastic uses this to fetch
-		// deploy/elastic-layout.json via File -> "Load Layout From Robot", so
-		// every drive station computer gets the same dashboard. Port 5800 is
-		// where Elastic looks for it, not a setting, so it stays here.
-		WebServer.start(5800, Filesystem.getDeployDirectory().getPath());
+        // Serve the deploy directory over HTTP. Elastic uses this to fetch
+        // deploy/elastic-layout.json via File -> "Load Layout From Robot", so
+        // every drive station computer gets the same dashboard. Port 5800 is
+        // where Elastic looks for it, not a setting, so it stays here.
+        WebServer.start(5800, Filesystem.getDeployDirectory().getPath());
 
-		// Seed the dashboard-editable tunables (teleop speed scale, vision
-		// flush distances and tracking gains) with their Constants defaults
-		// if not already stored on the roboRIO - before the subsystems are
-		// built.
-		Tunables.init();
+        // Seed the dashboard-editable tunables (teleop speed scale, vision
+        // flush distances and tracking gains) with their Constants defaults
+        // if not already stored on the roboRIO - before the subsystems are
+        // built.
+        Tunables.init();
 
-		m_robotContainer = new RobotContainer();
+        m_robotContainer = new RobotContainer();
 
-		// Stream the USB driver camera to the dashboard.
-		CameraServer.startAutomaticCapture();
+        // Stream the USB driver camera to the dashboard.
+        CameraServer.startAutomaticCapture();
 
-		// Warm up the PathPlanner path-following code (trajectory generation,
-		// JSON parsing, JIT compilation) while the robot is sitting disabled.
-		// Without this, the first path of autonomous starts with a noticeable
-		// delay/stutter, which shifts the whole routine.
-		CommandScheduler.getInstance().schedule(FollowPathCommand.warmupCommand());
-	}
+        // Warm up the PathPlanner path-following code (trajectory generation,
+        // JSON parsing, JIT compilation) while the robot is sitting disabled.
+        // Without this, the first path of autonomous starts with a noticeable
+        // delay/stutter, which shifts the whole routine.
+        CommandScheduler.getInstance().schedule(FollowPathCommand.warmupCommand());
+    }
 
-	/**
-	 * Runs every 20 ms regardless of mode. The CommandScheduler poll is what
-	 * makes the entire command-based framework work: it runs subsystem
-	 * periodic() methods, polls triggers, and executes scheduled commands.
-	 */
-	@Override
-	public void robotPeriodic() {
-		CommandScheduler.getInstance().run();
+    /**
+     * Runs every 20 ms regardless of mode. The CommandScheduler poll is what
+     * makes the entire command-based framework work: it runs subsystem
+     * periodic() methods, polls triggers, and executes scheduled commands.
+     */
+    @Override
+    public void robotPeriodic() {
+        CommandScheduler.getInstance().run();
 
-		// Publish all dashboard data (field pose, match time, subsystem
-		// status, alerts) once per loop.
-		m_robotContainer.updateDashboard();
-	}
+        // Publish all dashboard data (field pose, match time, subsystem
+        // status, alerts) once per loop.
+        m_robotContainer.updateDashboard();
+    }
 
-	@Override
-	public void disabledInit() {
-		// Stop all mechanism outputs when the robot is disabled
-		m_robotContainer.disabledInit();
+    @Override
+    public void disabledInit() {
+        // Stop all mechanism outputs when the robot is disabled
+        m_robotContainer.disabledInit();
 
-		// Show the pre/post-match checklist tab while disabled
-		Elastic.selectTab("Setup");
-	}
+        // Show the pre/post-match checklist tab while disabled
+        Elastic.selectTab("Setup");
+    }
 
-	@Override
-	public void disabledPeriodic() {}
+    @Override
+    public void disabledPeriodic() {}
 
-	@Override
-	public void disabledExit() {
-		// Hold the AlLow arm where it is (see RobotContainer.enabledInit)
-		m_robotContainer.enabledInit();
-	}
+    @Override
+    public void disabledExit() {
+        // Hold the AlLow arm where it is (see RobotContainer.enabledInit)
+        m_robotContainer.enabledInit();
+    }
 
-	/** Schedules the autonomous routine selected in the dashboard's auto chooser. */
-	@Override
-	public void autonomousInit() {
-		Elastic.selectTab("Autonomous");
+    /** Schedules the autonomous routine selected in the dashboard's auto chooser. */
+    @Override
+    public void autonomousInit() {
+        Elastic.selectTab("Autonomous");
 
-		m_autonomousCommand = m_robotContainer.getAutonomousCommand();
+        m_autonomousCommand = m_robotContainer.getAutonomousCommand();
 
-		if (m_autonomousCommand != null) {
-			CommandScheduler.getInstance().schedule(m_autonomousCommand);
-		}
-	}
+        if (m_autonomousCommand != null) {
+            CommandScheduler.getInstance().schedule(m_autonomousCommand);
+        }
+    }
 
-	@Override
-	public void autonomousPeriodic() {}
+    @Override
+    public void autonomousPeriodic() {}
 
-	@Override
-	public void autonomousExit() {}
+    @Override
+    public void autonomousExit() {}
 
-	/** Cancels any still-running autonomous command so drivers get control immediately. */
-	@Override
-	public void teleopInit() {
-		Elastic.selectTab("Teleop");
+    /** Cancels any still-running autonomous command so drivers get control immediately. */
+    @Override
+    public void teleopInit() {
+        Elastic.selectTab("Teleop");
 
-		if (m_autonomousCommand != null) {
-			m_autonomousCommand.cancel();
-		}
-	}
+        if (m_autonomousCommand != null) {
+            m_autonomousCommand.cancel();
+        }
+    }
 
-	@Override
-	public void teleopPeriodic() {}
+    @Override
+    public void teleopPeriodic() {}
 
-	@Override
-	public void teleopExit() {}
+    @Override
+    public void teleopExit() {}
 
-	/** Test mode: clear everything so test routines start from a clean slate. */
-	@Override
-	public void testInit() {
-		Elastic.selectTab("Testing");
+    /** Test mode: clear everything so test routines start from a clean slate. */
+    @Override
+    public void testInit() {
+        Elastic.selectTab("Testing");
 
-		CommandScheduler.getInstance().cancelAll();
-	}
+        CommandScheduler.getInstance().cancelAll();
+    }
 
-	@Override
-	public void testPeriodic() {}
+    @Override
+    public void testPeriodic() {}
 
-	@Override
-	public void testExit() {}
+    @Override
+    public void testExit() {}
 
-	@Override
-	public void simulationPeriodic() {}
+    @Override
+    public void simulationPeriodic() {}
 }
