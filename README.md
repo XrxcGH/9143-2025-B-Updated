@@ -239,6 +239,7 @@ The pivot offsets in `Constants.DashboardConstants` (`ALLOW_PIVOT_X_OFFSET`, `AL
   - `ChoreoTrajectoryTest`: `Demo.traj` loads through the real parser.
 - `gradle.properties` pins Gradle to the WPILib JDK (`C:/Users/Public/wpilib/2026/jdk`); another JDK on `JAVA_HOME` can hard-crash WPILib natives during tests. On macOS / Linux, or with WPILib installed elsewhere, override `org.gradle.java.home` in `~/.gradle/gradle.properties` (it takes precedence) or edit the line.
 - Tests fork one JVM per class (`forkEvery`) because simulated CAN devices reject duplicate IDs in one process.
+- GitHub runs the same `./gradlew build` on every pull request and every push to `main` (`.github/workflows/build.yml`). A red X on a pull request means the code does not build or a test fails; the run's log shows the first error.
 
 ## Other tools
 
