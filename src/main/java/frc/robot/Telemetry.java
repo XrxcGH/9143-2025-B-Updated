@@ -68,7 +68,10 @@ public class Telemetry {
 	// The robot pose for dashboards is published as a proper Field2d by
 	// the Dashboard class; this class only handles logging-oriented output.
 
-	// Mechanisms to represent the swerve module states
+	// Mechanisms to represent the swerve module states. The numbers below
+	// are the geometry of a unit canvas (root at its center, full speed
+	// reaching its edge: speed / (2 x MaxSpeed)), not robot settings, so
+	// they stay here.
 	private final Mechanism2d[] m_moduleMechanisms = new Mechanism2d[] {
 		new Mechanism2d(1, 1),
 		new Mechanism2d(1, 1),

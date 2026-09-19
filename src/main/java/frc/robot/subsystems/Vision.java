@@ -210,7 +210,8 @@ public class Vision extends SubsystemBase {
     private boolean latchSpent = false;
 
     // Precomputed "limelight-<name>" NT table names (avoids per-loop string
-    // concatenation in the hot paths)
+    // concatenation in the hot paths). The "limelight-" prefix is the
+    // camera's own naming, not a setting.
     private final String[] limelightTableNames;
 
     // Per-camera fusion bookkeeping (same indexing as LIMELIGHT_NAMES)
@@ -220,7 +221,7 @@ public class Vision extends SubsystemBase {
 
     // Heading seed bookkeeping
     private double lastHeadingSeedTime = -1e9;        // FPGA time any trusted MegaTag1 solve was fused
-    private double lastStrongHeadingSeedTime = -1e9;  // FPGA time a two-or-more-tag MegaTag1 solve was fused
+    private double lastStrongHeadingSeedTime = -1e9;  // FPGA time a multi-tag MegaTag1 solve was fused
     private Rotation2d lastStrongSeedHeading = null;  // that solve's own heading
     private double reseedUntil = -1.0;                // FPGA time until which MegaTag1 is fused while enabled
 
@@ -388,16 +389,17 @@ public class Vision extends SubsystemBase {
      *
      * Goals are in the robot frame: forward = where the tag should be along
      * +X (negative = behind the robot center, that is, a backed-up approach),
-     * left = where it should be along +Y (0 = centered).
+     * left = where it should be along +Y (0 = centered; REEF_GOAL_LEFT_METERS
+     * and STATION_GOAL_LEFT_METERS).
      */
     public static Optional<TrackingGoal> trackingGoal(TagClass tagClass,
             double reefFlushDistance, double stationFlushDistance) {
         double side = approachesRear(tagClass) ? -1.0 : 1.0;
         switch (tagClass) {
             case REEF:
-                return Optional.of(new TrackingGoal(side * reefFlushDistance, 0.0));
+                return Optional.of(new TrackingGoal(side * reefFlushDistance, VisionConstants.REEF_GOAL_LEFT_METERS));
             case CORAL_STATION:
-                return Optional.of(new TrackingGoal(side * stationFlushDistance, 0.0));
+                return Optional.of(new TrackingGoal(side * stationFlushDistance, VisionConstants.STATION_GOAL_LEFT_METERS));
             default:
                 return Optional.empty();
         }
@@ -545,7 +547,10 @@ public class Vision extends SubsystemBase {
         }
     }
 
-    /** Values per tag in a Limelight "rawfiducials" array: id, txnc, tync, ta, distToCamera, distToRobot, ambiguity. */
+    /**
+     * Values per tag in a Limelight "rawfiducials" array: id, txnc, tync, ta, distToCamera, distToRobot, ambiguity.
+     * Limelight's array format, not a setting, so it stays here.
+     */
     private static final int RAW_FIDUCIAL_STRIDE = 7;
 
     /**
@@ -606,7 +611,7 @@ public class Vision extends SubsystemBase {
         double now = Timer.getFPGATimestamp();
         for (int i = 0; i < limelightTableNames.length; i++) {
             var sample = LimelightHelpers.getLimelightDoubleArrayEntry(limelightTableNames[i], "rawfiducials").getAtomic();
-            boolean stale = now - sample.timestamp / 1e6 > VisionConstants.SEEN_TAG_STALE_SECONDS;
+            boolean stale = now - sample.timestamp / 1e6 > VisionConstants.SEEN_TAG_STALE_SECONDS; // NT time is in microseconds
             rawFiducialsByCamera[i] = stale ? null : sample.value;
         }
         cachedClosestSeen = closestSeenTag(rawFiducialsByCamera);
@@ -933,8 +938,8 @@ public class Vision extends SubsystemBase {
     }
 
     /**
-     * True when a MegaTag1 solve with a trusted heading (two or more tags,
-     * or one close unambiguous tag) was fused within
+     * True when a MegaTag1 solve with a trusted heading (multi-tag, or one
+     * close unambiguous tag) was fused within
      * HEADING_SEED_FRESHNESS_SECONDS - that is, the pose heading has been
      * pulled toward a field-referenced value recently.
      */
@@ -944,7 +949,8 @@ public class Vision extends SubsystemBase {
 
     /**
      * True when the pose heading has converged on a strong seed: a
-     * two-or-more-tag MegaTag1 solve was fused within
+     * multi-tag MegaTag1 solve (MT1_MULTI_TAG_MIN_COUNT or more tags) was
+     * fused within
      * HEADING_SEED_FRESHNESS_SECONDS and the estimator's heading now agrees
      * with that solve's own heading within HEADING_SEED_AGREEMENT_DEGREES.
      * (One fused solve only closes part of the heading error, so freshness
@@ -959,9 +965,10 @@ public class Vision extends SubsystemBase {
         return Math.abs(current.minus(lastStrongSeedHeading).getDegrees()) <= VisionConstants.HEADING_SEED_AGREEMENT_DEGREES;
     }
 
-    /** The last pose fused from the given camera, if it was fused within the last second. */
+    /** The last pose fused from the given camera, if it was fused within the last FUSED_POSE_DISPLAY_SECONDS. */
     public Optional<Pose2d> getLastFusedPose(int index) {
-        if (lastFusedPose[index] == null || Timer.getFPGATimestamp() - lastFusedTime[index] > 1.0) {
+        if (lastFusedPose[index] == null
+                || Timer.getFPGATimestamp() - lastFusedTime[index] > VisionConstants.FUSED_POSE_DISPLAY_SECONDS) {
             return Optional.empty();
         }
         return Optional.of(lastFusedPose[index]);
@@ -984,7 +991,7 @@ public class Vision extends SubsystemBase {
             return false;
         }
         if (megaTag1) {
-            if (estimate.tagCount < 2) {
+            if (estimate.tagCount < VisionConstants.MT1_MULTI_TAG_MIN_COUNT) { // a single-tag solve: the kind with an ambiguity to gate
                 if (estimate.rawFiducials == null || estimate.rawFiducials.length == 0) {
                     return false;
                 }
@@ -1077,17 +1084,18 @@ public class Vision extends SubsystemBase {
             PoseEstimate estimate = batch.get(k);
             int camera = batchCameras.get(k);
             // Confidence scales with tag count and closeness
-            double xyStdDev = 0.3
-                + 0.4 * (estimate.avgTagDist * estimate.avgTagDist) / Math.max(1, estimate.tagCount);
-            // MegaTag1 heading is trusted while seeding - tightly with 2+
-            // tags so the stationary heading collapses onto the solve in a
-            // few frames even at the disabled throttle's about 1 Hz - and
-            // MegaTag2's heading never is.
+            double xyStdDev = VisionConstants.XY_STD_DEV_BASE
+                + VisionConstants.XY_STD_DEV_DISTANCE_SQUARED_GAIN * (estimate.avgTagDist * estimate.avgTagDist)
+                    / Math.max(1, estimate.tagCount);
+            // MegaTag1 heading is trusted while seeding - tightly for a
+            // multi-tag solve so the stationary heading collapses onto the
+            // solve in a few frames even at the disabled throttle's about
+            // 1 Hz - and MegaTag2's heading never is.
             double rotStdDev = seedingHeading
-                ? (estimate.tagCount >= 2
+                ? (estimate.tagCount >= VisionConstants.MT1_MULTI_TAG_MIN_COUNT
                     ? VisionConstants.MT1_MULTI_TAG_ROTATION_STD_DEV
                     : VisionConstants.MT1_SINGLE_TAG_ROTATION_STD_DEV)
-                : 9999999;
+                : VisionConstants.MT2_ROTATION_STD_DEV;
 
             swerve.addVisionMeasurement(
                 estimate.pose,
@@ -1098,7 +1106,7 @@ public class Vision extends SubsystemBase {
             lastFusedTime[camera] = now;
             if (seedingHeading) {
                 lastHeadingSeedTime = now;
-                if (estimate.tagCount >= 2) {
+                if (estimate.tagCount >= VisionConstants.MT1_MULTI_TAG_MIN_COUNT) {
                     lastStrongHeadingSeedTime = now;
                     lastStrongSeedHeading = estimate.pose.getRotation();
                 }

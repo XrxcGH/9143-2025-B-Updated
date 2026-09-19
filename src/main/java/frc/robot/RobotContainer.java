@@ -30,6 +30,8 @@ import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 
 import frc.robot.generated.TunerConstants;
 import frc.robot.Constants.AlLowConstants;
+import frc.robot.Constants.AutoConstants;
+import frc.robot.Constants.ControllerConstants;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.Constants.VisionConstants.TagClass;
 
@@ -46,11 +48,14 @@ import frc.robot.util.Tunables;
  *
  * ================================ CONTROLS =================================
  * Anything that drives the robot by itself is a hold, never a toggle; anything
- * rare or dangerous is Test-mode only, or disabled-only behind a 1 s hold.
+ * rare or dangerous is Test-mode only, or disabled-only behind a held button.
+ * The numbers behind these bindings (speeds, preset angles, hold times,
+ * trigger thresholds, ports) are in Constants.
  *
- * DRIVER (port 0):
+ * DRIVER (ControllerConstants.DRIVER_CONTROLLER_PORT):
  *   Left stick          - field-centric translation (scaled by the "Drive -
- *                         Teleop Speed Scale" tunable, 0.75 by default)
+ *                         Teleop Speed Scale" tunable, default
+ *                         DriveConstants.TELEOP_SPEED_SCALE)
  *   Right stick X       - rotation (same scale)
  *   A (hold)            - X-lock the wheels (brake)
  *   Left bumper         - driver heading zero: the way the robot faces now =
@@ -65,23 +70,23 @@ import frc.robot.util.Tunables;
  *                         sticks back instantly
  *   Right trigger (hold)- align on the coral station: bumper flush, centered
  *   Y                   - re-seed the pose heading from the AprilTags in view
- *                         (MegaTag1 fused for 2 s); the driver's own "forward"
- *                         does not move
+ *                         (MegaTag1 fused for HEADING_RESEED_WINDOW_SECONDS);
+ *                         the driver's own "forward" does not move
  *   Rumble (driver)     - steady while an alignment is held and aligned
  *
- * OPERATOR (port 1):
+ * OPERATOR (ControllerConstants.OPERATOR_CONTROLLER_PORT):
  *   Right stick Y       - AlLow pivot manual control (holds angle on release)
- *   D-pad down          - AlLow deploy to intake angle (45 deg), rollers in
- *   D-pad right         - AlLow to hold angle (15 deg), rollers stopped
- *   D-pad up            - AlLow stow (0 deg), rollers stopped
+ *   D-pad down          - AlLow deploy to the INTAKE preset angle, rollers in
+ *   D-pad right         - AlLow to the HOLD preset angle, rollers stopped
+ *   D-pad up            - AlLow stow (the BASE preset), rollers stopped
  *   Left trigger (hold) - AlLow rollers intake
  *   Right trigger (hold)- AlLow rollers eject
  *   B                   - KitBot eject first piece (timed)
  *   Y                   - KitBot eject stacked piece (timed)
  *   X (hold)            - KitBot re-align piece
  *   A (hold)            - KitBot jog piece
- *   Start, held 1 s, DISABLED only - zero the AlLow pivot encoder (arm at
- *                         its stow)
+ *   Start, held ALLOW_ZERO_HOLD_SECONDS, DISABLED only - zero the AlLow
+ *                         pivot encoder (arm at its stow)
  * ===========================================================================
  */
 public class RobotContainer {
@@ -116,8 +121,10 @@ public class RobotContainer {
     private final Telemetry logger = new Telemetry(MaxSpeed);
 
     // Controllers: driver handles the drivetrain, operator handles mechanisms
-    private final CommandXboxController driver_controller = new CommandXboxController(0);
-    private final CommandXboxController operator_controller = new CommandXboxController(1);
+    private final CommandXboxController driver_controller =
+        new CommandXboxController(ControllerConstants.DRIVER_CONTROLLER_PORT);
+    private final CommandXboxController operator_controller =
+        new CommandXboxController(ControllerConstants.OPERATOR_CONTROLLER_PORT);
     /** Haptic cue for the driver: aligned. */
     private final Rumble driverRumble = new Rumble(driver_controller);
 
@@ -150,13 +157,14 @@ public class RobotContainer {
         NamedCommands.registerCommand("JogPieceCommand", kitbot.jogPiece());
 
         // Auto chooser is populated with every auto in deploy/pathplanner/autos.
-        // The default must name an auto that actually exists there.
-        // LoggedDashboardChooser publishes it under SmartDashboard/Auto Mode
-        // (Elastic's ComboBox Chooser widget) and records the selection in
+        // The default (AutoConstants.DEFAULT_AUTO_NAME) must name an auto that
+        // actually exists there. LoggedDashboardChooser publishes it under
+        // SmartDashboard/Auto Mode (Elastic's ComboBox Chooser widget; the key
+        // is the layout's, so it stays here) and records the selection in
         // the AdvantageKit log.
         SendableChooser<Command> chooser;
         if (AutoBuilder.isConfigured()) {
-            chooser = AutoBuilder.buildAutoChooser("Center Drop");
+            chooser = AutoBuilder.buildAutoChooser(AutoConstants.DEFAULT_AUTO_NAME);
         } else {
             // Swerve.configureAutoBuilder already reported why. buildAutoChooser
             // would throw here and take the whole robot program down with it.
@@ -333,18 +341,19 @@ public class RobotContainer {
         // These require the subsystem, which pauses the manual default
         // command while held - the pivot keeps holding its angle on the
         // controller throughout.
-        operator_controller.rightTrigger().whileTrue(Commands.startEnd(
+        operator_controller.rightTrigger(ControllerConstants.OPERATOR_TRIGGER_THRESHOLD).whileTrue(Commands.startEnd(
             () -> allow.setRollerSpeed(AlLowConstants.ALLOW_ROLLER_EJECT_SPEED),
             allow::stopRoller, allow));
-        operator_controller.leftTrigger().whileTrue(Commands.startEnd(
+        operator_controller.leftTrigger(ControllerConstants.OPERATOR_TRIGGER_THRESHOLD).whileTrue(Commands.startEnd(
             () -> allow.setRollerSpeed(AlLowConstants.ALLOW_ROLLER_INTAKE_SPEED),
             allow::stopRoller, allow));
 
-        // Encoder zeroing: only while disabled, only after a 1 s hold, with
-        // the arm at its stowed position. Zeroing a deployed arm mid-match
-        // would silently shift the soft limits and every preset by the arm's
-        // current angle (resetPivotEncoder drops the closed loop first, so
-        // there is no lunge - but the corrupted reference frame remains).
+        // Encoder zeroing: only while disabled, only after a hold of
+        // ALLOW_ZERO_HOLD_SECONDS, with the arm at its stowed position.
+        // Zeroing a deployed arm mid-match would silently shift the soft
+        // limits and every preset by the arm's current angle
+        // (resetPivotEncoder drops the closed loop first, so there is no
+        // lunge - but the corrupted reference frame remains).
         operator_controller.start().and(DriverStation::isDisabled)
             .debounce(AlLowConstants.ALLOW_ZERO_HOLD_SECONDS)
             .onTrue(Commands.runOnce(allow::resetPivotEncoder, allow).ignoringDisable(true));
@@ -381,6 +390,7 @@ public class RobotContainer {
      * skipped rather than crashing robot construction.
      */
     private void addChoreoAutos() {
+        // The folder PathPlanner's Choreo loader reads from, not a setting
         File choreoDir = new File(Filesystem.getDeployDirectory(), "choreo");
         File[] trajFiles = choreoDir.listFiles((dir, name) -> name.endsWith(".traj"));
         if (trajFiles == null) {

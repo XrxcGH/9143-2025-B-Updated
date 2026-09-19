@@ -32,6 +32,7 @@ import edu.wpi.first.wpilibj2.command.Subsystem;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 
 import frc.robot.Constants.AutoConstants;
+import frc.robot.Constants.SwerveConstants;
 import frc.robot.Constants.VisionConstants;
 import frc.robot.util.Tunables;
 import frc.robot.generated.TunerConstants.TunerSwerveDrivetrain;
@@ -58,10 +59,11 @@ import frc.robot.generated.TunerConstants.TunerSwerveDrivetrain;
  * Vision instance elsewhere.
  */
 public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
-	private static final double kSimLoopPeriod = 0.005; // 5 ms
 	private Notifier m_simNotifier = null;
 	private double m_lastSimTime;
 
+	// The two alliance perspectives are the field's coordinate convention,
+	// not settings, so they stay here.
 	// Blue alliance sees forward as 0 degrees (toward red alliance wall)
 	private static final Rotation2d kBlueAlliancePerspectiveRotation = Rotation2d.kZero;
 	// Red alliance sees forward as 180 degrees (toward blue alliance wall)
@@ -105,12 +107,9 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
 	// Whether the last autonomous pose reset kept the vision-seeded heading
 	private boolean m_lastAutoResetKeptHeading = false;
 
-	// Vision-measurement spin rejection: angular rate above which vision
-	// poses are untrustworthy, and how long after the spin ends they stay
-	// rejected (covers image capture latency of the last smeared frames)
-	private static final double kVisionMaxOmegaRadPerSec = 2.0;
-	private static final double kVisionRejectAfterSpinSeconds = 0.2;
-	private double m_lastFastRotationTime = -kVisionRejectAfterSpinSeconds;
+	// Vision-measurement spin rejection: FPGA time the robot last spun
+	// faster than VISION_MAX_OMEGA_RAD_PER_SEC (see isRejectingVision)
+	private double m_lastFastRotationTime = -VisionConstants.VISION_REJECT_AFTER_SPIN_SECONDS;
 
 	// Swerve requests to apply during SysId characterization
 	private final SwerveRequest.SysIdSwerveTranslation m_translationCharacterization = new SwerveRequest.SysIdSwerveTranslation();
@@ -128,7 +127,7 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
 	private final SysIdRoutine m_sysIdRoutineTranslation = new SysIdRoutine(
 		new SysIdRoutine.Config(
 			null,   		// Use default ramp rate (1 V/s)
-			Volts.of(4),	// Reduce dynamic step voltage to 4 V to prevent brownout
+			Volts.of(SwerveConstants.SYSID_TRANSLATION_STEP_VOLTS),	// Reduced dynamic step to prevent a brownout
 			null,   		// Use default timeout (10 s)
 			// Log state with SignalLogger class
 			state -> SignalLogger.writeString("SysIdTranslation_State", state.toString())
@@ -144,7 +143,7 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
 	private final SysIdRoutine m_sysIdRoutineSteer = new SysIdRoutine(
 		new SysIdRoutine.Config(
 			null,			// Use default ramp rate (1 V/s)
-			Volts.of(7),	// Use dynamic voltage of 7 V
+			Volts.of(SwerveConstants.SYSID_STEER_STEP_VOLTS),	// Dynamic step voltage
 			null,			// Use default timeout (10 s)
 			// Log state with SignalLogger class
 			state -> SignalLogger.writeString("SysIdSteer_State", state.toString())
@@ -164,9 +163,9 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
 	private final SysIdRoutine m_sysIdRoutineRotation = new SysIdRoutine(
 		new SysIdRoutine.Config(
 			// This is in radians per second^2, but SysId only supports "volts per second"
-			Volts.of(Math.PI / 6).per(Second),
+			Volts.of(SwerveConstants.SYSID_ROTATION_RAMP_RATE).per(Second),
 			// This is in radians per second, but SysId only supports "volts"
-			Volts.of(Math.PI),
+			Volts.of(SwerveConstants.SYSID_ROTATION_STEP),
 			null,	// Use default timeout (10 s)
 			// Log state with SignalLogger class
 			state -> SignalLogger.writeString("SysIdRotation_State", state.toString())
@@ -263,7 +262,7 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
 		// (17.548 x 8.052 m, matching navgrid.json and the tag layout). Without
 		// this every red-alliance path, odometry reset and Choreo start pose
 		// would be mirrored about the wrong centerline, about 1 m off in X.
-		FlippingUtil.symmetryType = FlippingUtil.FieldSymmetry.kRotational;
+		FlippingUtil.symmetryType = VisionConstants.FIELD_SYMMETRY;
 		FlippingUtil.fieldSizeX = VisionConstants.FIELD_LENGTH_METERS;
 		FlippingUtil.fieldSizeY = VisionConstants.FIELD_WIDTH_METERS;
 		try {
@@ -503,7 +502,8 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
 			double measuredSpeed = Math.hypot(measured.vxMetersPerSecond, measured.vyMetersPerSecond);
 			double now = Timer.getFPGATimestamp();
 			boolean pushing = !m_trackTranslationHeld
-				&& Math.hypot(m_trackVx, m_trackVy) >= VisionConstants.TrackingGains.MIN_LINEAR_VELOCITY * 0.9
+				&& Math.hypot(m_trackVx, m_trackVy) >= VisionConstants.TrackingGains.MIN_LINEAR_VELOCITY
+					* VisionConstants.TrackingGains.CONTACT_COMMAND_RATIO
 				&& measuredSpeed < VisionConstants.TrackingGains.CONTACT_MAX_SPEED
 				&& Math.abs(lateralError) < lateralDeadband * exitRatio
 				&& Math.abs(forwardError) < VisionConstants.TrackingGains.CONTACT_FORWARD_ERROR;
@@ -523,7 +523,7 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
 				// Gains are live-tunable from the dashboard (Tunables -> Preferences)
 				double speed = Math.min(Math.max(distance * Tunables.trackingDistanceKp(),
 					VisionConstants.TrackingGains.MIN_LINEAR_VELOCITY), VisionConstants.TrackingGains.MAX_LINEAR_VELOCITY);
-				if (distance > 1e-6) {
+				if (distance > 1e-6) { // a zero-length error has no direction (numerical guard, not a setting)
 					vx = speed * forwardError / distance;
 					vy = speed * lateralError / distance;
 				}
@@ -577,7 +577,8 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
 	 */
 	private void applyTrackingCommand(double vx, double vy, double omega) {
 		double now = Timer.getFPGATimestamp();
-		double dt = Math.min(Math.max(now - m_trackLastTime, 0.005), 0.05);
+		double dt = Math.min(Math.max(now - m_trackLastTime, VisionConstants.TrackingGains.SLEW_MIN_DT_SECONDS),
+			VisionConstants.TrackingGains.SLEW_MAX_DT_SECONDS);
 		m_trackLastTime = now;
 
 		double dvx = vx - m_trackVx;
@@ -599,14 +600,15 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
 
 	/**
 	 * True while vision measurements are being rejected: the robot has spun
-	 * faster than the limit within the last kVisionRejectAfterSpinSeconds
-	 * (motion blur and rolling shutter corrupt the solve; the image was
-	 * captured 25-100 ms ago, so the gate covers the last smeared frames
-	 * after a spin ends, not only this instant). Vision checks this so it
-	 * never books a fusion that did not happen.
+	 * faster than VISION_MAX_OMEGA_RAD_PER_SEC within the last
+	 * VISION_REJECT_AFTER_SPIN_SECONDS (motion blur and rolling shutter
+	 * corrupt the solve; the image was captured 25-100 ms ago, so the gate
+	 * covers the last smeared frames after a spin ends, not only this
+	 * instant). Vision checks this so it never books a fusion that did not
+	 * happen.
 	 */
 	public boolean isRejectingVision() {
-		return Timer.getFPGATimestamp() - m_lastFastRotationTime < kVisionRejectAfterSpinSeconds;
+		return Timer.getFPGATimestamp() - m_lastFastRotationTime < VisionConstants.VISION_REJECT_AFTER_SPIN_SECONDS;
 	}
 
 	/**
@@ -642,7 +644,7 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
 	 * Pose reset used at the start of every auto (PathPlanner's resetOdom and
 	 * the Choreo autos). The path's ideal starting pose is a nominal
 	 * placement; the heading the pose estimator holds when a strong MegaTag1
-	 * seed is fresh (two or more tags while sitting on the line) is the real
+	 * seed is fresh (a multi-tag solve while sitting on the line) is the real
 	 * one, and it is the heading MegaTag2 trusts absolutely for the whole
 	 * period - overwriting it with the nominal value would bias every vision
 	 * pose by the placement error. So: keep the vision heading and reset only
@@ -733,7 +735,7 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
 		var state = getStateCopy();
 
 		// Track when the robot last spun fast, for vision-measurement rejection
-		if (Math.abs(state.Speeds.omegaRadiansPerSecond) > kVisionMaxOmegaRadPerSec) {
+		if (Math.abs(state.Speeds.omegaRadiansPerSecond) > VisionConstants.VISION_MAX_OMEGA_RAD_PER_SEC) {
 			m_lastFastRotationTime = Timer.getFPGATimestamp();
 		}
 
@@ -756,8 +758,8 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
 		Optional<Alliance> alliance = DriverStation.getAlliance();
 		if (alliance.isPresent()) {
 			boolean changed = m_driverForwardAlliance != null && alliance.get() != m_driverForwardAlliance;
-			// Until the driver has zeroed it themselves, a converged two-or-more
-			// tag heading seed while disabled sets the driver's frame, which is
+			// Until the driver has zeroed it themselves, a converged multi-tag
+			// heading seed while disabled sets the driver's frame, which is
 			// what a real field needs (robot booted facing any which way,
 			// placed on the field, never zeroed). One reef tag in front of the
 			// bumper - the bench case that must not move the driver's frame -
@@ -777,7 +779,8 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
 	private void startSimThread() {
 		m_lastSimTime = Utils.getCurrentTimeSeconds();
 
-		// Run simulation at a faster rate so PID gains behave more reasonably
+		// Run simulation faster than the robot loop (SIM_LOOP_PERIOD_SECONDS)
+		// so PID gains behave more reasonably
 		m_simNotifier = new Notifier(() -> {
 			final double currentTime = Utils.getCurrentTimeSeconds();
 			double deltaTime = currentTime - m_lastSimTime;
@@ -786,6 +789,6 @@ public class Swerve extends TunerSwerveDrivetrain implements Subsystem {
 			// Use the measured time delta; get battery voltage from WPILib
 			updateSimState(deltaTime, RobotController.getBatteryVoltage());
 		});
-		m_simNotifier.startPeriodic(kSimLoopPeriod);
+		m_simNotifier.startPeriodic(SwerveConstants.SIM_LOOP_PERIOD_SECONDS);
 	}
 }

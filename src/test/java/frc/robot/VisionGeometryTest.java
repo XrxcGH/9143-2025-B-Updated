@@ -109,13 +109,15 @@ class VisionGeometryTest {
     }
 
     @Test
-    void goalsAreFlushAndCenteredAtTheEndThatClassIsApproachedFrom() {
+    void goalsAreFlushAtTheApproachEndAndAtTheConfiguredLateralOffset() {
         Vision.TrackingGoal reef = Vision.trackingGoal(TagClass.REEF, 0.47, 0.50).orElseThrow();
         assertEquals(-0.47, reef.forward, EPS, "reef: the tag ends up BEHIND the robot center (rear bumper flush)");
-        assertEquals(0.0, reef.left, EPS, "reef: centered on the face - the L1 trough has no left / right branch");
+        assertEquals(VisionConstants.REEF_GOAL_LEFT_METERS, reef.left, EPS,
+            "reef: across the robot the goal is the roller's offset (0 = centered; the L1 trough has no left / right branch)");
         Vision.TrackingGoal station = Vision.trackingGoal(TagClass.CORAL_STATION, 0.47, 0.50).orElseThrow();
         assertEquals(0.50, station.forward, EPS, "station: the tag ends up AHEAD of the robot center (front bumper flush)");
-        assertEquals(0.0, station.left, EPS);
+        assertEquals(VisionConstants.STATION_GOAL_LEFT_METERS, station.left, EPS,
+            "station: across the robot the goal is the coral opening's offset (0 = centered)");
         assertTrue(Vision.trackingGoal(TagClass.NONE, 0.47, 0.50).isEmpty(), "barge / processor / unknown: no goal");
     }
 

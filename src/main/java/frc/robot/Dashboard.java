@@ -24,11 +24,12 @@ import edu.wpi.first.wpilibj.smartdashboard.FieldObject2d;
 import edu.wpi.first.wpilibj.smartdashboard.Mechanism2d;
 import edu.wpi.first.wpilibj.smartdashboard.MechanismLigament2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-import edu.wpi.first.wpilibj.util.Color;
 import edu.wpi.first.wpilibj.util.Color8Bit;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import edu.wpi.first.wpilibj2.command.Commands;
 
+import frc.robot.Constants.AlLowConstants;
+import frc.robot.Constants.DashboardConstants;
 import frc.robot.Constants.VisionConstants;
 import frc.robot.subsystems.AlLow;
 import frc.robot.subsystems.KitBot;
@@ -47,6 +48,9 @@ import frc.robot.util.Tunables;
  * used anywhere in this project). Persistent problems surface through
  * WPILib Alerts (Elastic's Alerts widget). Tunable "magic numbers" are
  * edited on the Testing tab through WPILib Preferences (see Tunables).
+ * The topic names are what the Elastic layout binds to, so they stay in
+ * this class; the drawing sizes and the alert threshold are in
+ * Constants.DashboardConstants.
  *
  * The Vision/ topics are published whether or not a Limelight is
  * configured, so the layout's widgets always have a source; with no camera
@@ -79,19 +83,14 @@ public class Dashboard {
     // Mechanism2d: side-on schematic of the AlLow arm, rendered by Glass
     // and AdvantageScope (both live over NT). Drawing convention: 0 deg
     // (stowed) points straight up; positive angles swing the arm outward.
-    private final Mechanism2d allowMech = new Mechanism2d(1.2, 1.2);
+    // Its size and style are in DashboardConstants; the arm's length is
+    // AlLowConstants.ALLOW_ARM_LENGTH_METERS, the one the simulation uses.
+    private final Mechanism2d allowMech = new Mechanism2d(
+        DashboardConstants.ALLOW_MECHANISM_WIDTH, DashboardConstants.ALLOW_MECHANISM_HEIGHT);
     private final MechanismLigament2d allowArmLigament;
 
-    // Approximate arm length for both visualizations (meters). VERIFY.
-    private static final double ARM_LENGTH = 0.35;
-
-    // 3D component pose for AdvantageScope's 3D field view: attach a glTF
-    // CAD model and map this entry to the arm component in the 3D config.
-    // Robot-relative frame: X forward, Y left, Z up, origin at the robot
-    // center on the floor. Offsets are placeholders - VERIFY against the
-    // CAD model's component origin.
-    private static final double PIVOT_X_OFFSET = 0.0;  // Meters forward of robot center - VERIFY
-    private static final double PIVOT_HEIGHT = 0.25;   // Pivot height above the floor (meters) - VERIFY
+    // 3D component pose for AdvantageScope's 3D field view (one component:
+    // the arm); the pivot offsets are in DashboardConstants.
     private final Pose3d[] componentPoses = new Pose3d[1];
 
     /** Resting-voltage alert; only evaluated while disabled (sag under load is normal). */
@@ -110,9 +109,11 @@ public class Dashboard {
         this.allow = allow;
 
         // --- AlLow arm Mechanism2d (Glass / AdvantageScope) ---
-        allowArmLigament = allowMech.getRoot("AlLow", 0.6, 0.2)
-            .append(new MechanismLigament2d("Arm", ARM_LENGTH, 90, 6,
-                new Color8Bit(Color.kCyan)));
+        // 90 deg: the stowed arm (0 deg) draws straight up
+        allowArmLigament = allowMech.getRoot("AlLow",
+                DashboardConstants.ALLOW_MECHANISM_ROOT_X, DashboardConstants.ALLOW_MECHANISM_ROOT_Y)
+            .append(new MechanismLigament2d("Arm", AlLowConstants.ALLOW_ARM_LENGTH_METERS, 90,
+                DashboardConstants.ALLOW_ARM_LINE_WIDTH, new Color8Bit(DashboardConstants.ALLOW_ARM_COLOR)));
 
         // --- Sendables (registered once; NT keeps them updated) ---
         // Field widget: realtime robot location on the field drawing
@@ -177,7 +178,8 @@ public class Dashboard {
         // Registers each Limelight's MJPEG stream under /CameraPublisher so
         // Elastic's Camera Stream widget can display it. The dashboard pulls
         // video straight from the camera; nothing streams through the roboRIO.
-        // (Nothing is registered while LIMELIGHT_NAMES is empty.)
+        // (Nothing is registered while LIMELIGHT_NAMES is empty.) The host
+        // name and port are the camera's own, not settings.
         for (String name : VisionConstants.LIMELIGHT_NAMES) {
             CameraServer.addCamera(new HttpCamera(
                 "limelight-" + name,
@@ -222,7 +224,8 @@ public class Dashboard {
         // Y left, Z up). Arm pitches about the Y axis; the sign/zero must
         // match the CAD component's modeled orientation - VERIFY in
         // AdvantageScope and flip/offset here if the model swings backward.
-        componentPoses[0] = new Pose3d(PIVOT_X_OFFSET, 0, PIVOT_HEIGHT,
+        componentPoses[0] = new Pose3d(DashboardConstants.ALLOW_PIVOT_X_OFFSET,
+            DashboardConstants.ALLOW_PIVOT_Y_OFFSET, DashboardConstants.ALLOW_PIVOT_HEIGHT,
             new Rotation3d(0, Units.degreesToRadians(armAngleDeg), 0));
 
         // --- AdvantageKit structured outputs (.wpilog + RLOG live stream) ---
@@ -300,7 +303,8 @@ public class Dashboard {
         for (int i = 0; i < visionHasTargetKeys.length; i++) {
             SmartDashboard.putBoolean(visionHasTargetKeys[i], vision.hasTarget(i));
             // Last pose fused from each camera, drawn on the field beside the
-            // robot; cleared once that camera has not fused for a second
+            // robot; cleared once that camera has not fused for
+            // VisionConstants.FUSED_POSE_DISPLAY_SECONDS
             final int camera = i;
             vision.getLastFusedPose(i).ifPresentOrElse(
                 visionFieldObjects[camera]::setPose,
@@ -326,6 +330,6 @@ public class Dashboard {
         // Resting-voltage check only while disabled - voltage sags under
         // load during a match are normal and would nag the drive team.
         lowBatteryAlert.set(DriverStation.isDisabled()
-            && RobotController.getBatteryVoltage() < 12.0);
+            && RobotController.getBatteryVoltage() < DashboardConstants.LOW_BATTERY_VOLTS);
     }
 }

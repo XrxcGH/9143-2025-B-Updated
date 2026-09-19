@@ -31,16 +31,18 @@ public class KitBot extends SubsystemBase {
     public KitBot() {
         rollerMotor = new SparkMax(KitBotConstants.ROLLER_MOTOR_ID, MotorType.kBrushless);
 
-        // Because parameters are only set once on construction, the CAN
-        // timeout can be long without blocking robot operation.
-        rollerMotor.setCANTimeout(250);
+        // Parameters are only set once, here, so the CAN timeout can be long
+        // (see ROLLER_CAN_TIMEOUT_MS).
+        rollerMotor.setCANTimeout(KitBotConstants.ROLLER_CAN_TIMEOUT_MS);
 
         // Voltage compensation keeps the roller behaving the same as the
         // battery voltage dips; the current limit prevents breaker trips or
         // burning out the motor if the roller stalls. Persisted to flash so
-        // a brownout cannot revert the controller to factory defaults.
+        // a brownout cannot revert the controller to factory defaults. The
+        // idle mode is not set here (see KitBotConstants).
         SparkMaxConfig rollerConfig = new SparkMaxConfig();
         rollerConfig
+            .inverted(KitBotConstants.ROLLER_MOTOR_INVERTED)
             .voltageCompensation(KitBotConstants.ROLLER_MOTOR_VOLTAGE_COMP)
             .smartCurrentLimit(KitBotConstants.ROLLER_MOTOR_CURRENT_LIMIT);
         rollerMotor.configure(rollerConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);

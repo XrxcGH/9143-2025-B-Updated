@@ -11,7 +11,6 @@ import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkClosedLoopController.ArbFFUnits;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
 import com.revrobotics.spark.SparkMax;
-import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.revrobotics.spark.config.SparkMaxConfig;
 
 import edu.wpi.first.math.system.plant.DCMotor;
@@ -76,14 +75,9 @@ public class AlLow extends SubsystemBase {
     // ------------------------------------------------------------------
     // Desktop simulation (only constructed when running off-robot). The
     // physics model exists purely so the mechanism moves in the sim GUI /
-    // AdvantageScope; the values below affect simulation fidelity only.
-    // Gravity is not simulated because the arm's zero is vertical, not
-    // horizontal (matching kG = 0 until tuned) - enable both together once
-    // the mounting orientation is verified.
+    // AdvantageScope; its model values are ALLOW_ARM_LENGTH_METERS and the
+    // ALLOW_SIM_ constants.
     // ------------------------------------------------------------------
-    private static final double SIM_GEAR_RATIO = 360.0 / AlLowConstants.ALLOW_PIVOT_POSITION_CONVERSION;
-    private static final double SIM_ARM_LENGTH_METERS = 0.35; // Estimate - affects sim only
-    private static final double SIM_ARM_MASS_KG = 2.0;        // Estimate - affects sim only
     private SparkMaxSim pivotMotorSim;
     private SingleJointedArmSim armSim;
 
@@ -100,15 +94,20 @@ public class AlLow extends SubsystemBase {
         resetPivotEncoder();
 
         if (RobotBase.isSimulation()) {
+            // getNEO(1): the one NEO a Spark MAX drives
             pivotMotorSim = new SparkMaxSim(pivotMotor, DCMotor.getNEO(1));
             armSim = new SingleJointedArmSim(
                 DCMotor.getNEO(1),
-                SIM_GEAR_RATIO,
-                SingleJointedArmSim.estimateMOI(SIM_ARM_LENGTH_METERS, SIM_ARM_MASS_KG),
-                SIM_ARM_LENGTH_METERS,
+                AlLowConstants.ALLOW_SIM_GEAR_RATIO,
+                SingleJointedArmSim.estimateMOI(AlLowConstants.ALLOW_ARM_LENGTH_METERS, AlLowConstants.ALLOW_SIM_ARM_MASS_KG),
+                AlLowConstants.ALLOW_ARM_LENGTH_METERS,
                 Units.degreesToRadians(AlLowConstants.ALLOW_PIVOT_MIN_ANGLE),
                 Units.degreesToRadians(AlLowConstants.ALLOW_PIVOT_MAX_ANGLE),
-                false, // No gravity - see class note above
+                // No gravity, and not a setting: SingleJointedArmSim measures
+                // its angle from horizontal, while this arm's 0 deg is its
+                // vertical stow, so the sim's gravity would act 90 deg out of
+                // phase with the real arm and the sin(angle) feedforward.
+                false,
                 Units.degreesToRadians(AlLowConstants.ALLOW_PIVOT_MIN_ANGLE));
         }
     }
@@ -124,7 +123,7 @@ public class AlLow extends SubsystemBase {
 
         pivotConfig
             .inverted(AlLowConstants.ALLOW_PIVOT_MOTOR_INVERTED)
-            .idleMode(IdleMode.kBrake)
+            .idleMode(AlLowConstants.ALLOW_PIVOT_IDLE_MODE)
             .smartCurrentLimit(AlLowConstants.ALLOW_PIVOT_CURRENT_LIMIT)
             .voltageCompensation(AlLowConstants.ALLOW_NOMINAL_VOLTAGE);
 
@@ -143,7 +142,7 @@ public class AlLow extends SubsystemBase {
             .p(AlLowConstants.ALLOW_PIVOT_kP)
             .i(AlLowConstants.ALLOW_PIVOT_kI)
             .d(AlLowConstants.ALLOW_PIVOT_kD)
-            .outputRange(-1, 1);
+            .outputRange(AlLowConstants.ALLOW_PIVOT_MIN_OUTPUT, AlLowConstants.ALLOW_PIVOT_MAX_OUTPUT);
 
         // Soft limits (degrees) bound travel in every control mode
         pivotConfig.softLimit
@@ -157,7 +156,7 @@ public class AlLow extends SubsystemBase {
 
         rollerConfig
             .inverted(AlLowConstants.ALLOW_ROLLER_MOTOR_INVERTED)
-            .idleMode(IdleMode.kBrake)
+            .idleMode(AlLowConstants.ALLOW_ROLLER_IDLE_MODE)
             .smartCurrentLimit(AlLowConstants.ALLOW_ROLLER_CURRENT_LIMIT);
 
         pivotMotor.configure(pivotConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
@@ -234,7 +233,7 @@ public class AlLow extends SubsystemBase {
             manualModeEnabled = true;
 
             double speed = stickInput * AlLowConstants.ALLOW_MANUAL_SPEED_LIMIT;
-            pivotMotor.set(Math.min(Math.max(speed, -1), 1));
+            pivotMotor.set(Math.min(Math.max(speed, -1), 1)); // -1 to 1: the whole duty-cycle range, not a setting
         } else if (manualModeEnabled) {
             // Stick released this loop - hold where the still-moving arm can stop
             manualModeEnabled = false;
@@ -343,6 +342,7 @@ public class AlLow extends SubsystemBase {
      */
     @Override
     public void simulationPeriodic() {
+        // 0.02 s is one robot loop (this runs once per loop), not a setting
         armSim.setInputVoltage(pivotMotorSim.getAppliedOutput() * RobotController.getBatteryVoltage());
         armSim.update(0.02);
 

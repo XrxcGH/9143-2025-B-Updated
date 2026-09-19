@@ -14,7 +14,20 @@ The drivetrain, vision and alignment code is the [A robot's](https://github.com/
 - **KitBot roller**: Single NEO/Spark MAX roller that ejects coral into the reef's L1 trough. It ejects out of the robot's **rear**; the coral is loaded from the coral station at the **front**.
 - **AlLow (Algae Low) intake**: Pivoting ground intake (NEO pivot + NEO rollers) with closed-loop angle control that holds position on the controller, and is held again every time the robot enables.
 - **Vision (inert, no camera mounted)**: The A robot's Limelight stack (MegaTag pose fusion + robot-frame AprilTag alignment) with the goal resolver reduced to what this robot scores with. `VisionConstants.LIMELIGHT_NAMES` is empty, so nothing touches NetworkTables and the camera-only driver bindings do not exist. Enabling a camera is a constants-only change (see [Vision](#vision-visionjava)).
-- **Autonomous**: PathPlanner routines and Choreo trajectories, both selected from one dashboard chooser (default: *Center Drop*).
+- **Autonomous**: PathPlanner routines and Choreo trajectories, both selected from one dashboard chooser (default: *Center Drop*, `AutoConstants.DEFAULT_AUTO_NAME`).
+
+---
+
+## Configuration
+
+Every number and setting a person might change (CAN ids, gains, speeds, tolerances, timeouts, presets, camera and field geometry, log ports) lives in [Constants.java](src/main/java/frc/robot/Constants.java), in the nested class for its subsystem, and nowhere else: every other class is logic only, so the robot is tuned in one file. The table of contents at the top of that file lists each nested class, what it configures and which classes read it. Each value gives its unit in its name or its comment. The values that need work on the robot are marked MEASURE or VERIFY (a physical fact to confirm before anything built on it means anything) or TUNE (a starting point to adjust on the robot); an unmarked value is a design choice, not a property of this robot.
+
+What stays outside it, and why:
+
+- The swerve drivetrain model, in `generated/TunerConstants.java` (CTRE Tuner X's format)
+- Names and ports that other software expects, in the class that uses them: NetworkTables topic names and Preferences keys (the Elastic layout binds to the topics, and renaming a key loses the value stored on the robot), the Elastic tab names and the layout server's port 5800, the PathPlanner named-command names the `.auto` files reference, and the Limelight's table-name prefix, stream port and NetworkTables array layouts
+- Mathematical and unit constants and fixed conventions, such as the 20 ms robot loop
+- The vendor files (`LimelightHelpers.java`, `util/Elastic.java`)
 
 ---
 
@@ -35,11 +48,11 @@ Anything that drives the robot by itself is a *hold*, never a toggle; anything r
 | Right trigger (hold) | **Align on the coral station**: front bumper flush, centered. *Bound only once a Limelight is configured* |
 | Y | **Re-seed the pose heading** from the AprilTags in view (MegaTag1 fused for 2 s). The driver's own "forward" does not move. *Bound only once a Limelight is configured* |
 
-- **Speed scaling.** Stick speed and rotation rate are scaled by the *Drive - Teleop Speed Scale* tunable (0.75 by default: 75 % of top speed, 0.75 rot/s).
+- **Speed scaling.** Stick speed and rotation rate are scaled by the *Drive - Teleop Speed Scale* tunable (0.75 by default: 75 % of top speed, 0.75 rot/s). Its default and limits, the rotation rate, the stick deadband, the nudge speed, the align trigger threshold and the rumble strength are in `DriveConstants`; the controller ports are in `ControllerConstants`.
 - **Align targets.** What the align triggers aim at is the driver's choice, not inferred: the KitBot has no piece sensor, so one trigger means "reef" and the other "coral station". Tags of the other class are ignored while a trigger is held, so a station tag in view cannot hijack a reef alignment.
 - **Rumble.** The driver's controller buzzes steadily while an alignment is held and aligned. That is the cue to call for the eject.
 - **Driver heading zero.** It moves only the driver's frame, never the pose estimator's heading, so it is safe at any time (point the robot away from you first). While disabled with no tag supplying a heading (always the case while no camera is mounted) it also seeds the pose heading to alliance-forward; **Back + left bumper** forces that seed at any time.
-- **Heading re-seed (Y).** While enabled only MegaTag2 is fused, and MegaTag2 takes its heading *from* the pose, so it never corrects a pose heading that has drifted. Y fuses MegaTag1, whose solve carries its own heading, for 2 s (`HEADING_RESEED_WINDOW_SECONDS`); `Vision/Reseeding Heading` shows the window. With no tag in view it does nothing. Inactive in Test mode, where Back / Start + Y are SysId bindings.
+- **Heading re-seed (Y).** While enabled only MegaTag2 is fused, and MegaTag2 takes its heading *from* the pose, so it never corrects a pose heading that has drifted. Y fuses MegaTag1, whose solve carries its own heading, for 2 s (`VisionConstants.HEADING_RESEED_WINDOW_SECONDS`); `Vision/Reseeding Heading` shows the window. With no tag in view it does nothing. Inactive in Test mode, where Back / Start + Y are SysId bindings.
 - **SysId.** It applies open-loop voltage steps to the drivetrain, so those bindings (and B, point modules) exist only when Test mode is selected on the Driver Station.
 
 ### Operator (Xbox controller, port 1)
@@ -57,6 +70,8 @@ Anything that drives the robot by itself is a *hold*, never a toggle; anything r
 | A (hold) | KitBot jog piece |
 | Start, held 1 s, **disabled only** | Zero the AlLow pivot encoder (arm at its stow) |
 
+The AlLow preset angles, roller speeds and zeroing hold time are in `AlLowConstants`; the KitBot roller speeds and eject time are in `KitBotConstants`; how far a trigger must be pulled is `ControllerConstants.OPERATOR_TRIGGER_THRESHOLD`.
+
 ---
 
 ## Subsystems
@@ -64,8 +79,8 @@ Anything that drives the robot by itself is a *hold*, never a toggle; anything r
 ### Swerve ([Swerve.java](src/main/java/frc/robot/subsystems/Swerve.java))
 The A robot's Swerve: extends the Phoenix 6 `SwerveDrivetrain`, adds PathPlanner `AutoBuilder` configuration (with the alliance flip set to the 2025 field size), vision pose fusion (with the required FPGA-to-Phoenix timestamp conversion and a spin-rate gate), the AprilTag alignment command, SysId routines, and the driver's heading frame. All driving (teleop, alignment and path following) uses closed-loop velocity so wheel speeds track the request regardless of battery sag. Top speed is about 5.96 m/s at 12 V.
 
-- **Driver frame.** The driver's "forward" never moves because of vision. Field-centric driving steers relative to the pose heading, which vision is allowed to correct. So the driver's forward is kept as a direction in the raw gyro frame (which only the gyro moves), and the operator perspective is recomputed every loop to cancel whatever vision or a pose reset did to the pose heading (`Swerve.periodic`). It changes only when the driver zeroes it (left bumper), when an auto resets the pose, when the alliance changes, or, until the driver has zeroed it, while disabled with a converged two-or-more-tag heading seed.
-- **Autonomous start.** It keeps a fresh vision heading: `resetPoseForAuto` resets only the translation when a strong MegaTag1 seed is fresh and agrees with the path's nominal heading within 20°; otherwise (always, while there is no camera) it resets the full pose. Both PathPlanner and the Choreo autos go through it.
+- **Driver frame.** The driver's "forward" never moves because of vision. Field-centric driving steers relative to the pose heading, which vision is allowed to correct. So the driver's forward is kept as a direction in the raw gyro frame (which only the gyro moves), and the operator perspective is recomputed every loop to cancel whatever vision or a pose reset did to the pose heading (`Swerve.periodic`). It changes only when the driver zeroes it (left bumper), when an auto resets the pose, when the alliance changes, or, until the driver has zeroed it, while disabled with a converged multi-tag heading seed (two or more tags, `VisionConstants.MT1_MULTI_TAG_MIN_COUNT`).
+- **Autonomous start.** It keeps a fresh vision heading: `resetPoseForAuto` resets only the translation when a strong MegaTag1 seed is fresh and agrees with the path's nominal heading within 20° (`VisionConstants.HEADING_SEED_MAX_DISAGREEMENT_DEGREES`); otherwise (always, while there is no camera) it resets the full pose. Both PathPlanner and the Choreo autos go through it.
 
 ### KitBot ([KitBot.java](src/main/java/frc/robot/subsystems/KitBot.java))
 One NEO/Spark MAX roller with voltage compensation and a stall current limit, run open-loop. All behavior is exposed as command factories (`ejectFirstPiece`, `ejectStackedPiece`, `realignPiece`, `jogPiece`) consumed by both the button bindings and PathPlanner `NamedCommands`, so the roller always stops when a command ends or is interrupted. There is no position or velocity loop, so there is nothing to hold on enable.
@@ -74,8 +89,8 @@ One NEO/Spark MAX roller with voltage compensation and a stall current limit, ru
 Pivot arm (0° stowed to 60° max, encoder zeroed at the stow on boot) plus intake rollers.
 
 - Angle moves run closed-loop on the Spark MAX (plain position control), which latches the reference. The arm therefore keeps holding its angle no matter which command is scheduled, and roller-only commands never disturb the hold.
-- A `sin(angle)` gravity feedforward (arbitrary-feedforward volts) is re-evaluated against the measured angle every loop. Re-sending the same reference is harmless under plain position control. It would *not* be under REV MAXMotion, which restarts its profile from the measured state on every new setpoint; a note in the class says so for whoever changes the control mode. No kS term is configured (see the note beside `ALLOW_PIVOT_kG`).
-- **Manual release.** It holds where the arm can stop: when the stick returns to center the target is the measured angle plus the stopping distance (velocity × `ALLOW_MANUAL_RELEASE_STOP_SECONDS` / 2), not the angle the moving arm is passing through, which would let it coast past and be dragged back.
+- A `sin(angle)` gravity feedforward (arbitrary-feedforward volts) is re-evaluated against the measured angle every loop. Re-sending the same reference is harmless under plain position control. It would *not* be under REV MAXMotion, which restarts its profile from the measured state on every new setpoint; a note in the class says so for whoever changes the control mode. No kS term is configured (see the note beside `AlLowConstants.ALLOW_PIVOT_kG`).
+- **Manual release.** It holds where the arm can stop: when the stick returns to center the target is the measured angle plus the stopping distance (velocity × `AlLowConstants.ALLOW_MANUAL_RELEASE_STOP_SECONDS` / 2), not the angle the moving arm is passing through, which would let it coast past and be dragged back.
 - **Held on enable.** Disabling cuts the output and drops the closed loop; `RobotContainer.enabledInit()` (from `Robot.disabledExit`) holds the arm at its resting angle, so a deployed arm does not hang on brake mode alone until the operator touches something.
 - **Zeroing is disabled-only.** Operator Start held 1 s, or the Setup tab's *Zero AlLow Pivot* button. Both do nothing while enabled, because zeroing a deployed arm shifts the soft limits and every preset.
 - Soft limits on the controller bound travel in every control mode.
@@ -93,10 +108,10 @@ The constructor refuses mismatched array lengths by name, so a half-filled-in ca
 **Pose fusion.** The subsystem sends the estimated heading to each Limelight every loop and fuses the returned MegaTag2 poses with distance/tag-count-scaled confidence. While disabled (and during a driver re-seed window) it fuses MegaTag1 instead, whose solve carries an absolute heading, so the pose heading is field-correct before the match starts.
 
 - Each camera frame is fused once (the NT sample timestamp identifies a frame); the cameras' estimates are inserted oldest-first.
-- Estimates are rejected when off-field, when a MegaTag2 solve averages more than 6 m to its tags, when a single-tag MegaTag1 solve is ambiguous (> 0.7) or far (> 3 m), and while the robot is spinning fast (> 2 rad/s, plus 0.2 s).
+- Estimates are rejected when off-field, when a MegaTag2 solve averages more than 6 m to its tags, when a single-tag MegaTag1 solve is ambiguous (> 0.7) or far (> 3 m), and while the robot is spinning fast (> 2 rad/s, plus 0.2 s). These gates and the confidence model (standard deviations) are in `VisionConstants`.
 - Each camera's last fused pose is drawn on the Field widget.
 
-**Alignment** works in the robot frame: each camera's primary tag is converted from Limelight camera space into "where is the tag relative to the robot center" using that camera's mounting pose (`Vision.tagPositionInRobotFrame`, pinned by `VisionGeometryTest`), so a rear camera, a yawed camera or an offset lens all drive the same loop with no per-camera mirroring. Empty or all-zero camera arrays, and a camera-space Z under 0.1 m, never become a "0 m away" target.
+**Alignment** works in the robot frame: each camera's primary tag is converted from Limelight camera space into "where is the tag relative to the robot center" using that camera's mounting pose (`Vision.tagPositionInRobotFrame`, pinned by `VisionGeometryTest`), so a rear camera, a yawed camera or an offset lens all drive the same loop with no per-camera mirroring. Empty or all-zero camera arrays, and a camera-space Z under 0.1 m, never become a "0 m away" target. Every servo value below is in `VisionConstants.TrackingGains`.
 
 - Translation is one P controller on the error vector: speed from its length (with a 0.12 m/s floor), direction along it, clamped as one. Per-axis controllers snap the direction of travel each time an axis crosses its own deadband, which whips the swerve modules round.
 - It stops when the forward and lateral errors (3 cm each, because the L1 trough runs the width of a face) are inside their deadbands, and stays stopped until one passes 1.6× its deadband. Heading is a second P loop (1° deadband, same hysteresis) to the heading square to the tag's face.
@@ -104,7 +119,7 @@ The constructor refuses mismatched array lengths by name, so a half-filled-in ca
 - "Told to move, not moving, nearly there" for 0.3 s counts as arrived by contact rather than stalling against the reef, with its own exit threshold.
 - `Swerve.isAligned()` gates the driver's rumble and is available for gating a score.
 
-**Latched, filtered target.** The servo never drives on a raw camera solve. When a trigger is pressed the closest tag of the chosen class is latched. Each *new* camera frame is turned into a field position for it, using the pose the robot had when the image was captured (`samplePoseAt` at the frame timestamp minus pipeline + capture latency), not the pose it has now. That position is low-pass filtered (α = 0.3) behind an outlier gate (0.25 m, 3 frames in a row re-seed it), and every loop the tracker gets that point seen from the current odometry pose: smooth between frames and free of camera latency. While the latched tag is out of view (it always is in the last stretch) its position is carried on odometry for up to 1.5 s (`Vision/Target From Memory`). The latch is dropped at once if the alignment class changes, and nothing new is latched until the driver lets go and presses again.
+**Latched, filtered target.** The servo never drives on a raw camera solve. When a trigger is pressed the closest tag of the chosen class is latched. Each *new* camera frame is turned into a field position for it, using the pose the robot had when the image was captured (`samplePoseAt` at the frame timestamp minus pipeline + capture latency), not the pose it has now. That position is low-pass filtered (α = 0.3) behind an outlier gate (0.25 m, 3 frames in a row re-seed it), and every loop the tracker gets that point seen from the current odometry pose: smooth between frames and free of camera latency. While the latched tag is out of view (it always is in the last stretch) its position is carried on odometry for up to 1.5 s (`Vision/Target From Memory`). The latch is dropped at once if the alignment class changes, and nothing new is latched until the driver lets go and presses again. The filter, outlier-gate and memory values are in `VisionConstants.TrackingGains`.
 
 **Square heading.** It does not need a field-true gyro. The tag's square heading comes from the 2025 AprilTag layout, but the pose heading is in whatever frame the gyro was last zeroed. So each frame's MegaTag1 solve is compared with the pose heading at capture, the difference is filtered (`Vision/Heading Offset`), and the square heading is converted into the pose estimator's own frame before the servo sees it.
 
@@ -112,22 +127,22 @@ The constructor refuses mismatched array lengths by name, so a half-filled-in ca
 
 | Tags | Goal |
 |---|---|
-| Reef (6-11, 17-22) | Tag `REEF_FLUSH_DISTANCE` **behind** the robot center (rear bumper flush with the reef base), centered on the face, square. The KitBot ejects into the L1 trough from there; the trough has no left / right branch |
-| Coral stations (1, 2, 12, 13) | Tag `STATION_FLUSH_DISTANCE` **ahead** of the robot center (front bumper flush with the wall), centered, square |
+| Reef (6-11, 17-22) | Tag `VisionConstants.REEF_FLUSH_DISTANCE` **behind** the robot center (rear bumper flush with the reef base), across the robot at `REEF_GOAL_LEFT_METERS` (centered on the face by default), square. The KitBot ejects into the L1 trough from there; the trough has no left / right branch |
+| Coral stations (1, 2, 12, 13) | Tag `VisionConstants.STATION_FLUSH_DISTANCE` **ahead** of the robot center (front bumper flush with the wall), across the robot at `STATION_GOAL_LEFT_METERS` (centered by default), square |
 | Barge (4, 5, 14, 15), processor (3, 16) | No goal, because nothing on this robot scores there. They still feed pose estimation and the *Best Tag* readouts |
 
-- Which end is driven up to each element (`REEF_APPROACH_REAR = true`, `STATION_APPROACH_REAR = false`) is this robot's mechanism layout, taken from the authored autos: every reef path ends with the robot's heading equal to the way the reef tag faces (backed up to it) and every station path ends facing the wall. `VisionGeometryTest` pins the aligner's square headings against those path end rotations. **Verify on the robot** that stick-forward leads with the end the coral is loaded from.
+- Which end is driven up to each element (`VisionConstants.REEF_APPROACH_REAR = true`, `STATION_APPROACH_REAR = false`) is this robot's mechanism layout, taken from the authored autos: every reef path ends with the robot's heading equal to the way the reef tag faces (backed up to it) and every station path ends facing the wall. `VisionGeometryTest` pins the aligner's square headings against those path end rotations. **Verify on the robot** that stick-forward leads with the end the coral is loaded from.
 - The flush distances are geometry: half the bumper-to-bumper length (0.464 m, the robot size in `pathplanner/settings.json`) plus a little standoff, 0.47 m by default, **not measured on this robot**. `Vision/Distance` (forward, negative behind) and `Vision/Lateral` (positive left) report the same robot-frame numbers, so tune by pushing the robot into position and copying the magnitude into the tunable.
 
-**Camera mounting (MegaTag camera poses).** `LIMELIGHT_POSES` holds each lens position and orientation and is pushed to the camera at startup, but only for cameras marked *measured*. Limelight's robot-space convention: origin at the frame center on the floor, X forward, **Y toward the robot's right** (opposite of WPILib), Z up; pitch positive = lens tilted up; yaw = lens heading (180° = rear-facing). After deploying, open `http://limelight-<name>.local:5801` and confirm the 3D preview shows the camera where it is, pointing the way it points; if not, flip the pitch or yaw sign in the constant.
+**Camera mounting (MegaTag camera poses).** `VisionConstants.LIMELIGHT_POSES` holds each lens position and orientation and is pushed to the camera at startup, but only for cameras marked *measured*. Limelight's robot-space convention: origin at the frame center on the floor, X forward, **Y toward the robot's right** (opposite of WPILib), Z up; pitch positive = lens tilted up; yaw = lens heading (180° = rear-facing). After deploying, open `http://limelight-<name>.local:5801` and confirm the 3D preview shows the camera where it is, pointing the way it points; if not, flip the pitch or yaw sign in the constant.
 
-**Heat and fan noise.** The LEDs are never turned on, and processing is throttled while the robot is disabled (one frame per 100 skipped, which still gives about 1 solve/s for the pre-match heading seed), with full rate restored the instant it enables. Selecting **Test mode** on the Driver Station lifts the throttle without enabling, so the vision readouts are live when checking a camera on the bench.
+**Heat and fan noise.** The LEDs are never turned on, and processing is throttled while the robot is disabled (one frame per 100 skipped, `VisionConstants.DISABLED_THROTTLE`, which still gives about 1 solve/s for the pre-match heading seed), with full rate restored the instant it enables. Selecting **Test mode** on the Driver Station lifts the throttle without enabling, so the vision readouts are live when checking a camera on the bench.
 
 ### Telemetry ([Telemetry.java](src/main/java/frc/robot/Telemetry.java))
 Publishes drivetrain state to NetworkTables (for AdvantageScope/Elastic) and CTRE SignalLogger (.hoot logs) at the odometry rate, plus Mechanism2d module visualizations.
 
 ### Dashboard ([Dashboard.java](src/main/java/frc/robot/Dashboard.java))
-The only place that publishes dashboard data (plain NetworkTables under `/SmartDashboard`; no Shuffleboard API, which Elastic dropped). Field widget with live pose (and each camera's last fused pose), match/battery/CAN vitals, AlLow and KitBot status, the AlLow arm `Mechanism2d`, the Elastic SwerveDrive widget, the vision and alignment readouts, the *Zero AlLow Pivot* and *Reset Tunables* buttons, a low-resting-battery Alert, and the AdvantageKit structured outputs (pose, speeds, module states, 3D component poses).
+The only place that publishes dashboard data (plain NetworkTables under `/SmartDashboard`; no Shuffleboard API, which Elastic dropped). Field widget with live pose (and each camera's last fused pose), match/battery/CAN vitals, AlLow and KitBot status, the AlLow arm `Mechanism2d`, the Elastic SwerveDrive widget, the vision and alignment readouts, the *Zero AlLow Pivot* and *Reset Tunables* buttons, a low-resting-battery Alert (threshold `DashboardConstants.LOW_BATTERY_VOLTS`), and the AdvantageKit structured outputs (pose, speeds, module states, 3D component poses).
 
 ---
 
@@ -161,23 +176,23 @@ Two separate questions are answered on the dashboard, and they deliberately use 
 
 **Alignment state** (while a trigger is held): `Swerve/Vision Tracking`, `Vision/Alignment Class` (REEF / CORAL_STATION / NONE), `Vision/Latched Tag`, `Vision/Target Visible`, `Vision/Target From Memory`, `Vision/Aligned`, `Vision/Forward Error`, `Vision/Lateral Error`, `Vision/Heading Error`, `Vision/Heading Offset`. **Heading seed**: `Vision/Heading Seed Fresh`, `Vision/Reseeding Heading`, `Vision/Auto Kept Heading`.
 
-- A camera whose tag list has not changed for 10 s is ignored by the seen-tag readouts, because NetworkTables keeps the last value of a camera that lost power or its link.
+- A camera whose tag list has not changed for 10 s (`VisionConstants.SEEN_TAG_STALE_SECONDS`) is ignored by the seen-tag readouts, because NetworkTables keeps the last value of a camera that lost power or its link.
 - While disabled the cameras are throttled to about one solve per second, so the readouts lag the streams. Select **Test mode** on the Driver Station (no need to enable) to lift the throttle for bench checks.
 - Where they are: *Best Tag* / *Align Tag* / *Visible Tags* / heading on Setup; *Vision Tracking* / *Aligned* / *Aligning On* / *Latched Tag* on Teleop; the alignment tag's TX / distance / lateral, the three servo errors and the Tunables on Testing.
 
 ### Live tuning without redeploying (Tunables)
-The numbers that get dialed in with the robot in front of you live in [util/Tunables.java](src/main/java/frc/robot/util/Tunables.java), backed by WPILib Preferences: they appear in the Testing tab's *Tunables* widget, and the roboRIO persists them to disk, so they survive reboots, power cycles and code deploys. Every getter clamps its value to a sane range, so a typo on the dashboard cannot command something dangerous. Edits take effect on the next loop.
+The numbers that get dialed in with the robot in front of you are read through [util/Tunables.java](src/main/java/frc/robot/util/Tunables.java), backed by WPILib Preferences: they appear in the Testing tab's *Tunables* widget, and the roboRIO persists them to disk, so they survive reboots, power cycles and code deploys. Every getter clamps its value to a sane range, so a typo on the dashboard cannot command something dangerous. Edits take effect on the next loop. `Tunables.java` holds only the Preferences keys and the logic; each default and its clamp range are in `Constants.java` (table below).
 
-**Defaults vs. stored values.** The values in `Constants.java` are only the factory defaults; *Reset Tunables to Defaults* restores them. Because stored values survive a deploy, **changing a default in `Constants.java` does nothing on a robot that already has the key stored**. Bump `DEFAULTS_VERSION` in `Tunables.java` (which overwrites every tunable once at the next boot) or press *Reset Tunables*. When only a few defaults move, add a targeted migration block in `Tunables.init()` instead (the shape is shown there), so everything else tuned on the dashboard survives.
+**Defaults vs. stored values.** The values in `Constants.java` are only the factory defaults; *Reset Tunables to Defaults* restores them. Because stored values survive a deploy, **changing a default in `Constants.java` does nothing on a robot that already has the key stored**. Bump `TunablesConstants.DEFAULTS_VERSION` in `Constants.java` (which overwrites every tunable once at the next boot) or press *Reset Tunables*. When only a few defaults move, add a targeted migration block in `Tunables.init()` instead (the shape is shown there), so everything else tuned on the dashboard survives.
 
-| Tunable | Default | What it sets |
-|---|---|---|
-| Drive - Teleop Speed Scale (0-1) | 0.75 | Fraction of top speed *and* of the 1 rot/s rotation rate at full stick; clamped to 0.05 to 1.0. Lower it (0.25) for indoor testing |
-| Vision - Reef Flush Distance (m) | 0.47 | Robot center to the reef tag with the **rear** bumper flush. Taken by magnitude; clamped to 0.3 to 2.0 |
-| Vision - Station Flush Distance (m) | 0.47 | Robot center to the station tag with the **front** bumper flush. Same clamp |
-| Vision - Tracking Distance kP / Rotation kP | 1.5 / 0.06 | Alignment servo gains (m/s per m, rad/s per degree), clamped to 0 to 3× the default |
+| Tunable | Default | Default and clamp in `Constants` | What it sets |
+|---|---|---|---|
+| Drive - Teleop Speed Scale (0-1) | 0.75 | `DriveConstants.TELEOP_SPEED_SCALE`, clamp `TELEOP_SPEED_SCALE_MIN` / `_MAX` | Fraction of top speed *and* of the 1 rot/s rotation rate at full stick; clamped to 0.05 to 1.0. Lower it (0.25) for indoor testing |
+| Vision - Reef Flush Distance (m) | 0.47 | `VisionConstants.REEF_FLUSH_DISTANCE`, clamp `FLUSH_DISTANCE_MIN` / `_MAX` | Robot center to the reef tag with the **rear** bumper flush. Taken by magnitude; clamped to 0.3 to 2.0 |
+| Vision - Station Flush Distance (m) | 0.47 | `VisionConstants.STATION_FLUSH_DISTANCE`, same clamp | Robot center to the station tag with the **front** bumper flush. Same clamp |
+| Vision - Tracking Distance kP / Rotation kP | 1.5 / 0.06 | `VisionConstants.TrackingGains.DISTANCE_kP` / `ROTATION_kP`, clamp `TUNABLE_KP_MIN` / `TUNABLE_KP_MAX_FACTOR` | Alignment servo gains (m/s per m, rad/s per degree), clamped to 0 to 3× the default |
 
-Deliberately *not* tunables: the AlLow pivot's Spark MAX gains and preset angles (written to the controller once at boot; try them live in the REV Hardware Client, then copy into `Constants`), and the AlLow conversion factor (a physical fact to verify, not a knob).
+Deliberately *not* tunables: the AlLow pivot's Spark MAX gains and preset angles (written to the controller once at boot; try them live in the REV Hardware Client, then copy into `Constants.AlLowConstants`), and the AlLow conversion factor (a physical fact to verify, not a knob).
 
 ## Logging and analysis (AdvantageKit and AdvantageScope)
 
@@ -185,7 +200,7 @@ Logging runs through AdvantageKit (`Robot` extends `LoggedRobot`):
 
 - Driver Station data, joysticks, and console output are captured automatically; `Dashboard.update()` records structured outputs every loop (robot `Pose2d`, `ChassisSpeeds`, module states/targets, AlLow angle/target, KitBot output, `Vision/BestTag`, `Vision/AlignmentTag`).
 - `.wpilog` files land on a USB stick (`/U/logs`) if present, else `/home/lvuser/logs` (sim: `./logs`). Open them in AdvantageScope.
-- **Live streaming**: in AdvantageScope, *Connect to Robot* with the RLOG source on **port 5810** (5800 is taken by the Elastic layout server). NT live viewing works too.
+- **Live streaming**: in AdvantageScope, *Connect to Robot* with the RLOG source on **port 5810** (`DashboardConstants.RLOG_PORT`; 5800 is taken by the Elastic layout server). NT live viewing works too.
 - The auto chooser is a `LoggedDashboardChooser`, so every log records which auto ran.
 - CTRE's SignalLogger (`.hoot`) runs alongside for Phoenix signals and SysId.
 - Full AdvantageKit log replay would also require IO-layer abstraction in every subsystem. This integration provides logging, not deterministic replay.
@@ -208,13 +223,13 @@ Logging runs through AdvantageKit (`Robot` extends `LoggedRobot`):
    The single `components` entry maps to `Pose3d[]` index 0 (the AlLow arm). `zeroedPosition`/`zeroedRotations` describe the arm's CAD origin at rest. Start at zero and adjust until it lines up (the `x: 90` rotation is the usual glTF Y-up to field Z-up fix).
 3. Select the **9143B** model on the 3D robot, then bind its arm component to the `AdvantageKit/RealOutputs/RobotState/ComponentPoses` field (drag it onto the robot and choose the component/3D mapping). Live-over-NT and log-replay both use the same field.
 
-The pivot offsets in `Dashboard.java` (`PIVOT_X_OFFSET`, `PIVOT_HEIGHT`) are placeholders. VERIFY them against the CAD.
+The pivot offsets in `Constants.DashboardConstants` (`ALLOW_PIVOT_X_OFFSET`, `ALLOW_PIVOT_Y_OFFSET`, `ALLOW_PIVOT_HEIGHT`) are placeholders. VERIFY them against the CAD.
 
 **Glass** works out of the box: `SmartDashboard/Field`, the `AlLow Mechanism` Mechanism2d, the command scheduler, all numeric topics for plotting, and `Telemetry`'s `DriveState` struct topics.
 
 ## Simulation and testing
 
-- `./gradlew simulateJava` starts the robot in the WPILib Sim GUI: CTRE's swerve simulation drives like the real robot (keyboard mapping in `simgui-ds.json`), and the AlLow pivot has `SingleJointedArmSim` physics wired to the Spark MAX sim, so the preset buttons move the arm. Watch it in the Mechanism2d or AdvantageScope.
+- `./gradlew simulateJava` starts the robot in the WPILib Sim GUI: CTRE's swerve simulation drives like the real robot (keyboard mapping in `simgui-ds.json`), and the AlLow pivot has `SingleJointedArmSim` physics wired to the Spark MAX sim (model values: `ALLOW_ARM_LENGTH_METERS` and the `ALLOW_SIM_` constants in `AlLowConstants`; gravity is not modeled, because the sim measures its angle from horizontal and the arm's 0° is its vertical stow), so the preset buttons move the arm. Watch it in the Mechanism2d or AdvantageScope.
 - `./gradlew test` (also run by `build`) runs six test classes (24 tests):
   - `RobotContainerTest`: the whole robot wires up and the scheduler runs.
   - `AlLowSimTest`: against the simulated arm with a stepped clock, the closed loop reaches the intake angle and holds it with the manual stick centered.
@@ -241,7 +256,7 @@ Two path-authoring tools feed the same auto chooser (`SmartDashboard/Auto Mode`)
 
 ### PathPlanner
 - Autos live in `src/main/deploy/pathplanner/autos` (*Center Drop*, *Leave*, *Starting Left*, *Starting Right*), paths in `.../paths` (2025.X file format, which PathPlanner 2026 uses as well). The reef paths end backed up to the reef (the KitBot ejects out of the rear); the station paths end facing the station.
-- The alliance flip uses the **2025 field size** (17.548 × 8.052 m, set in `Swerve.configureAutoBuilder`); PathPlannerLib 2026 defaults to the 2026 field, which would mirror red-alliance paths about the wrong centerline.
+- The alliance flip uses the **2025 field size** (17.548 × 8.052 m, `VisionConstants.FIELD_LENGTH_METERS` / `FIELD_WIDTH_METERS` / `FIELD_SYMMETRY`, applied in `Swerve.configureAutoBuilder`); PathPlannerLib 2026 defaults to the 2026 field, which would mirror red-alliance paths about the wrong centerline.
 - The KitBot commands are registered as `NamedCommands` under their original names (`EjectFirstPieceCommand`, etc.), because the `.auto` files reference these strings.
 - Path-following feedback gains live in `Constants.AutoConstants` (translation kP = 10, rotation kP = 7, the gains this robot's autos were driven with).
 - `FollowPathCommand.warmupCommand()` is scheduled at startup so the first path of auto starts without a stutter.
@@ -260,13 +275,13 @@ Two path-authoring tools feed the same auto chooser (`SmartDashboard/Auto Mode`)
 None of the code in this version has been run on this robot. In order:
 
 1. **Verify the CANcoder offsets in Tuner X** (wheels aligned straight forward) against `generated/TunerConstants.java`, which is the source of truth. The repository's old `tuner-project.json` was removed because it was stale: all four of its CANcoder offsets disagreed with `TunerConstants.java`, and it modeled every module with the MK4i steer ratio although the back modules are MK4n. Tuner X's generator assumes one module type, so do not regenerate the file; enter re-measured offsets by hand.
-2. **Verify which end is "front"**: after a driver heading zero (left bumper), stick-forward must lead with the end the coral is loaded from, and the KitBot must eject out of the other end. `REEF_APPROACH_REAR` / `STATION_APPROACH_REAR` and every authored auto assume it.
+2. **Verify which end is "front"**: after a driver heading zero (left bumper), stick-forward must lead with the end the coral is loaded from, and the KitBot must eject out of the other end. `VisionConstants.REEF_APPROACH_REAR` / `STATION_APPROACH_REAR` and every authored auto assume it.
 3. **Drive-team controls changed**: left bumper is a *driver* heading zero (Back + LB also seeds the pose heading), B / SysId are Test-mode only, the D-pad nudges in 8 directions, and the stick speed comes from the *Teleop Speed Scale* tunable. Drive it once before a match.
-4. **Verify the AlLow angle reading**: command 45° and check with a protractor. The conversion (13.334°/motor rotation, about 27:1 implied) is a carried-over placeholder. If it is wrong, every gain on top of it is meaningless.
+4. **Verify the AlLow angle reading**: command 45° and check with a protractor. The conversion (`AlLowConstants.ALLOW_PIVOT_POSITION_CONVERSION`, 13.334°/motor rotation, about 27:1 implied) is a carried-over placeholder. If it is wrong, every gain on top of it is meaningless.
 5. **Verify the AlLow gravity model**: the feedforward assumes the arm is vertical at 0° (stowed) so gravity torque scales with sin(angle). If the stow orientation differs, adjust `gravityFeedforward()` in `AlLow.java`.
-6. **Tune AlLow gains**: raise `ALLOW_PIVOT_kG` until the arm holds the intake angle with kP zeroed, then raise `ALLOW_PIVOT_kP` until tracking is crisp (`ALLOW_PIVOT_kI` stays 0, because kG replaces it).
-7. **Check the AlLow hold behaviors**: enable with the arm deployed, and it must stay put. Release the manual stick mid-travel and watch `AlLow/Angle` against `AlLow/Target`, then tune `ALLOW_MANUAL_RELEASE_STOP_SECONDS` (raise it if the arm comes back after a release, lower it if it creeps on). Confirm Start (held 1 s) zeroes the pivot only while disabled.
-8. **Test the autos**: path-following gains are unchanged from last season, but the library jump (PathPlanner 2025 to 2026) and the 2025-field flip warrant a full re-run on both alliances.
+6. **Tune AlLow gains** in `AlLowConstants`: raise `ALLOW_PIVOT_kG` until the arm holds the intake angle with kP zeroed, then raise `ALLOW_PIVOT_kP` until tracking is crisp (`ALLOW_PIVOT_kI` stays 0, because kG replaces it).
+7. **Check the AlLow hold behaviors**: enable with the arm deployed, and it must stay put. Release the manual stick mid-travel and watch `AlLow/Angle` against `AlLow/Target`, then tune `AlLowConstants.ALLOW_MANUAL_RELEASE_STOP_SECONDS` (raise it if the arm comes back after a release, lower it if it creeps on). Confirm Start (held 1 s) zeroes the pivot only while disabled.
+8. **Test the autos**: path-following gains (`AutoConstants`) are unchanged from last season, but the library jump (PathPlanner 2025 to 2026) and the 2025-field flip warrant a full re-run on both alliances.
 9. **Firmware**: 2026 firmware on all CTRE devices (TalonFX, CANcoder, Pigeon 2), current Spark MAX firmware via the REV Hardware Client, 2026 roboRIO image.
 10. **When a Limelight is mounted** (nothing below can be done before): fill in the three `VisionConstants` arrays and measure the lens pose; check the web-UI 3D preview; check *Best Tag* / *Visible Tags* against the stream in Test mode; push the robot flush against a reef face and a station wall and copy `|Vision/Distance|` into the two flush-distance tunables; then tune, on carpet, the servo values marked TUNE in `VisionConstants.TrackingGains` (the two kP tunables, the 0.12 m/s minimum speed, the deadbands, the contact thresholds). The defaults are the A robot's, which shares the chassis but not the weight. Check the heading re-seed (Y) and that an auto started in view of two tags reports `Vision/Auto Kept Heading`.
 

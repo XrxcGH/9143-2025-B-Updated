@@ -13,6 +13,7 @@ import edu.wpi.first.wpilibj.Filesystem;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
+import frc.robot.Constants.DashboardConstants;
 import frc.robot.util.Elastic;
 import frc.robot.util.Tunables;
 
@@ -26,7 +27,8 @@ import frc.robot.util.Tunables;
  * command, canceling it when teleop starts, running the command scheduler
  * every loop - plus the Elastic dashboard plumbing: it serves the layout
  * file to the dashboard, pushes live data every loop, and switches the
- * dashboard to the matching tab whenever the robot changes modes.
+ * dashboard to the matching tab whenever the robot changes modes (the tab
+ * names are the layout's own, so they stay here rather than in Constants).
  *
  * Logging runs through AdvantageKit ({@link LoggedRobot}): DriverStation
  * data, joysticks, and console output are captured automatically, and every
@@ -45,20 +47,20 @@ public class Robot extends LoggedRobot {
 	public Robot() {
 		// ---- AdvantageKit logger ----
 		// Metadata shows up in AdvantageScope's metadata tab for every log.
-		Logger.recordMetadata("ProjectName", "9143-2025-B");
-		Logger.recordMetadata("Robot", "B (KitBot + AlLow)");
+		Logger.recordMetadata("ProjectName", DashboardConstants.LOG_PROJECT_NAME);
+		Logger.recordMetadata("Robot", DashboardConstants.LOG_ROBOT_NAME);
 		// .wpilog files: to a USB stick (/U/logs) when one is plugged into
 		// the roboRIO, otherwise /home/lvuser/logs; in simulation, ./logs.
 		Logger.addDataReceiver(new WPILOGWriter());
-		// Live stream for AdvantageScope's "Connect to Robot" (RLOG). Port
-		// 5810 because the Elastic layout WebServer already owns 5800; both
-		// are inside the field-legal 5800-5810 range.
-		Logger.addDataReceiver(new RLOGServer(5810));
+		// Live stream for AdvantageScope's "Connect to Robot" (RLOG), on a
+		// port clear of the layout server's.
+		Logger.addDataReceiver(new RLOGServer(DashboardConstants.RLOG_PORT));
 		Logger.start();
 
-		// Serve the deploy directory over HTTP (port 5800). Elastic uses this
-		// to fetch deploy/elastic-layout.json via File -> "Load Layout From
-		// Robot", so every drive station computer gets the same dashboard.
+		// Serve the deploy directory over HTTP. Elastic uses this to fetch
+		// deploy/elastic-layout.json via File -> "Load Layout From Robot", so
+		// every drive station computer gets the same dashboard. Port 5800 is
+		// where Elastic looks for it, not a setting, so it stays here.
 		WebServer.start(5800, Filesystem.getDeployDirectory().getPath());
 
 		// Seed the dashboard-editable tunables (teleop speed scale, vision

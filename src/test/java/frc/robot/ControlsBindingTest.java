@@ -20,6 +20,7 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
 import frc.robot.Constants.AlLowConstants;
+import frc.robot.Constants.ControllerConstants;
 import frc.robot.subsystems.AlLow;
 import frc.robot.subsystems.KitBot;
 import frc.robot.subsystems.Vision;
@@ -49,8 +50,8 @@ class ControlsBindingTest {
         DriverStationSim.setDsAttached(true);
         teleopEnabled();
 
-        operator = new XboxControllerSim(1);
-        driver = new XboxControllerSim(0);
+        operator = new XboxControllerSim(ControllerConstants.OPERATOR_CONTROLLER_PORT);
+        driver = new XboxControllerSim(ControllerConstants.DRIVER_CONTROLLER_PORT);
         neutral();
         container = new RobotContainer();
         allow = (AlLow) field("allow");
@@ -289,9 +290,9 @@ class ControlsBindingTest {
         assertTrue(allow.isHoldingPosition(), "releasing the stick hands back to the closed-loop hold");
     }
 
-    /** The encoder zero moves every preset and both soft limits: disabled only, and only after a 1 s hold. */
+    /** The encoder zero moves every preset and both soft limits: disabled only, and only after an ALLOW_ZERO_HOLD_SECONDS hold. */
     @Test
-    void pivotZeroNeedsDisabledAndAOneSecondHold() throws InterruptedException {
+    void pivotZeroNeedsDisabledAndAFullHold() throws InterruptedException {
         double marker = AlLowConstants.PivotPresetAngles.HOLD.getAngle();
 
         allow.setPivotAngle(marker);
@@ -306,10 +307,10 @@ class ControlsBindingTest {
         run(2);
         allow.setPivotAngle(marker);
         operator.setStartButton(true);
-        runFor(0.3);
+        runFor(AlLowConstants.ALLOW_ZERO_HOLD_SECONDS * 0.3);
         assertEquals(marker, allow.getTargetAngle(), 1e-9, "a brushed Start does nothing");
         runFor(AlLowConstants.ALLOW_ZERO_HOLD_SECONDS + 0.2);
-        assertEquals(0.0, allow.getTargetAngle(), 1e-9, "Start held 1 s while disabled zeroes the pivot");
+        assertEquals(0.0, allow.getTargetAngle(), 1e-9, "Start held for the full hold time while disabled zeroes the pivot");
         assertFalse(allow.isHoldingPosition(), "zeroing drops the closed loop first");
     }
 

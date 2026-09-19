@@ -3,6 +3,7 @@ package frc.robot.util;
 import edu.wpi.first.wpilibj.Preferences;
 
 import frc.robot.Constants.DriveConstants;
+import frc.robot.Constants.TunablesConstants;
 import frc.robot.Constants.VisionConstants;
 
 /**
@@ -27,13 +28,17 @@ import frc.robot.Constants.VisionConstants;
  * Readers call the getters every time they need a value (a Preferences read
  * is one NetworkTables entry lookup - cheap), so edits take effect on the
  * next loop. Every getter clamps to a sane range so a typo on the dashboard
- * cannot command something dangerous.
+ * cannot command something dangerous. The defaults, the clamp ranges and
+ * the defaults version are all in Constants; this class holds only the
+ * Preferences keys and the logic.
  */
 public final class Tunables {
     private Tunables() {}
 
     // ------------------------------------------------------------------
-    // Keys as shown in the Robot Preferences widget (grouped by prefix)
+    // Keys as shown in the Robot Preferences widget (grouped by prefix).
+    // They stay here, not in Constants: a key is where its value is
+    // stored, so renaming one loses the value tuned on the robot.
     // ------------------------------------------------------------------
     private static final String TELEOP_SPEED_SCALE = "Drive - Teleop Speed Scale (0-1)";
     private static final String REEF_FLUSH_DISTANCE = "Vision - Reef Flush Distance (m)";
@@ -43,27 +48,10 @@ public final class Tunables {
     private static final String DEFAULTS_VERSION_KEY = "Tunables - Defaults Version (do not edit)";
 
     /**
-     * Version stamp of the factory defaults in Constants. Stored values
-     * survive deploys, so changing a default in Constants does nothing on a
-     * robot that already has the key stored - unless this number is bumped.
-     * On the first boot after a bump, init() does one of two things:
-     *   - if it has a targeted migration block for the stored version, it
-     *     overwrites only the keys named there and keeps everything else
-     *     the team has tuned on the dashboard;
-     *   - otherwise it overwrites every tunable with the new defaults.
-     * Bump it when a default changes and must take effect on the robot
-     * (and add a migration block when only a few defaults moved); leave it
-     * alone to preserve values tuned on the dashboard.
-     *
-     * Version 1 is the first set of defaults.
-     */
-    private static final int DEFAULTS_VERSION = 1;
-
-    /**
      * Seeds every key with its Constants default if it does not exist yet
      * (never overwrites a value the team has already tuned). When
-     * {@link #DEFAULTS_VERSION} has been bumped since the last boot it
-     * instead runs the targeted migration for the stored version or, if
+     * TunablesConstants.DEFAULTS_VERSION has been bumped since the last boot
+     * it instead runs the targeted migration for the stored version or, if
      * there is none, overwrites every key. Call once at robot startup,
      * before the subsystems are constructed.
      */
@@ -78,7 +66,7 @@ public final class Tunables {
         //       Preferences.setDouble(REEF_FLUSH_DISTANCE, VisionConstants.REEF_FLUSH_DISTANCE);
         //       Preferences.setInt(DEFAULTS_VERSION_KEY, 2);
         //   }
-        if (Preferences.getInt(DEFAULTS_VERSION_KEY, 0) != DEFAULTS_VERSION) {
+        if (Preferences.getInt(DEFAULTS_VERSION_KEY, 0) != TunablesConstants.DEFAULTS_VERSION) {
             resetToDefaults();
             return;
         }
@@ -95,7 +83,7 @@ public final class Tunables {
      * a defaults-version bump at boot that has no targeted migration).
      */
     public static void resetToDefaults() {
-        Preferences.setInt(DEFAULTS_VERSION_KEY, DEFAULTS_VERSION);
+        Preferences.setInt(DEFAULTS_VERSION_KEY, TunablesConstants.DEFAULTS_VERSION);
         Preferences.setDouble(TELEOP_SPEED_SCALE, DriveConstants.TELEOP_SPEED_SCALE);
         Preferences.setDouble(REEF_FLUSH_DISTANCE, VisionConstants.REEF_FLUSH_DISTANCE);
         Preferences.setDouble(STATION_FLUSH_DISTANCE, VisionConstants.STATION_FLUSH_DISTANCE);
@@ -125,11 +113,13 @@ public final class Tunables {
 
     /**
      * Fraction of theoretical top speed / rotation rate at full stick,
-     * clamped to [0.05, 1.0] so a bad dashboard entry can neither disable
-     * driving nor exceed the drivetrain's capability.
+     * clamped to [TELEOP_SPEED_SCALE_MIN, TELEOP_SPEED_SCALE_MAX] so a bad
+     * dashboard entry can neither disable driving nor exceed the
+     * drivetrain's capability.
      */
     public static double teleopSpeedScale() {
-        return clamped(TELEOP_SPEED_SCALE, DriveConstants.TELEOP_SPEED_SCALE, 0.05, 1.0);
+        return clamped(TELEOP_SPEED_SCALE, DriveConstants.TELEOP_SPEED_SCALE,
+            DriveConstants.TELEOP_SPEED_SCALE_MIN, DriveConstants.TELEOP_SPEED_SCALE_MAX);
     }
 
     // ------------------------------------------------------------------
@@ -139,27 +129,31 @@ public final class Tunables {
 
     /** Distance from the robot center to a reef tag with the rear bumper flush on the reef base. */
     public static double reefFlushDistance() {
-        return clampedMagnitude(REEF_FLUSH_DISTANCE, VisionConstants.REEF_FLUSH_DISTANCE, 0.3, 2.0);
+        return clampedMagnitude(REEF_FLUSH_DISTANCE, VisionConstants.REEF_FLUSH_DISTANCE,
+            VisionConstants.FLUSH_DISTANCE_MIN, VisionConstants.FLUSH_DISTANCE_MAX);
     }
 
     /** Distance from the robot center to a coral-station tag with the front bumper flush on the station wall. */
     public static double stationFlushDistance() {
-        return clampedMagnitude(STATION_FLUSH_DISTANCE, VisionConstants.STATION_FLUSH_DISTANCE, 0.3, 2.0);
+        return clampedMagnitude(STATION_FLUSH_DISTANCE, VisionConstants.STATION_FLUSH_DISTANCE,
+            VisionConstants.FLUSH_DISTANCE_MIN, VisionConstants.FLUSH_DISTANCE_MAX);
     }
 
     // ------------------------------------------------------------------
     // Vision tracking gains
     // ------------------------------------------------------------------
 
-    /** m/s of drive command per meter of position error, clamped to 0 to 3x the default. */
+    /** m/s of drive command per meter of position error, clamped to TUNABLE_KP_MIN to TUNABLE_KP_MAX_FACTOR x the default. */
     public static double trackingDistanceKp() {
         return clamped(TRACKING_DISTANCE_KP, VisionConstants.TrackingGains.DISTANCE_kP,
-            0.0, 3.0 * VisionConstants.TrackingGains.DISTANCE_kP);
+            VisionConstants.TrackingGains.TUNABLE_KP_MIN,
+            VisionConstants.TrackingGains.TUNABLE_KP_MAX_FACTOR * VisionConstants.TrackingGains.DISTANCE_kP);
     }
 
-    /** rad/s of rotation command per degree of angle error, clamped to 0 to 3x the default. */
+    /** rad/s of rotation command per degree of angle error, clamped to TUNABLE_KP_MIN to TUNABLE_KP_MAX_FACTOR x the default. */
     public static double trackingRotationKp() {
         return clamped(TRACKING_ROTATION_KP, VisionConstants.TrackingGains.ROTATION_kP,
-            0.0, 3.0 * VisionConstants.TrackingGains.ROTATION_kP);
+            VisionConstants.TrackingGains.TUNABLE_KP_MIN,
+            VisionConstants.TrackingGains.TUNABLE_KP_MAX_FACTOR * VisionConstants.TrackingGains.ROTATION_kP);
     }
 }
