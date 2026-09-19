@@ -91,9 +91,9 @@ import frc.robot.util.Tunables;
  */
 public class RobotContainer {
     /** Top speed from swerve characterization, used to scale driver input. */
-    private double MaxSpeed = TunerConstants.kSpeedAt12Volts.in(MetersPerSecond);
+    private double maxSpeed = TunerConstants.kSpeedAt12Volts.in(MetersPerSecond);
     /** Rotation rate at full stick and a speed scale of 1.0. */
-    private double MaxAngularRate =
+    private double maxAngularRate =
         RotationsPerSecond.of(DriveConstants.MAX_ANGULAR_RATE_ROTATIONS_PER_SECOND).in(RadiansPerSecond);
 
     // ------------------------------------------------------------------
@@ -118,15 +118,15 @@ public class RobotContainer {
         .withDriveRequestType(DriveRequestType.Velocity);
 
     /** Publishes swerve state to NetworkTables/SignalLogger every odometry update. */
-    private final Telemetry logger = new Telemetry(MaxSpeed);
+    private final Telemetry logger = new Telemetry(maxSpeed);
 
     // Controllers: driver handles the drivetrain, operator handles mechanisms
-    private final CommandXboxController driver_controller =
+    private final CommandXboxController driverController =
         new CommandXboxController(ControllerConstants.DRIVER_CONTROLLER_PORT);
-    private final CommandXboxController operator_controller =
+    private final CommandXboxController operatorController =
         new CommandXboxController(ControllerConstants.OPERATOR_CONTROLLER_PORT);
     /** Haptic cue for the driver: aligned. */
-    private final Rumble driverRumble = new Rumble(driver_controller);
+    private final Rumble driverRumble = new Rumble(driverController);
 
     // ------------------------------------------------------------------
     // Subsystems
@@ -134,8 +134,8 @@ public class RobotContainer {
     // Swerve creates its own Vision instance internally; constructing a
     // second one elsewhere would double up pose updates.
     public final Swerve swerve = TunerConstants.createDrivetrain();
-    private final KitBot kitbot = new KitBot();
-    private final AlLow allow = new AlLow();
+    private final KitBot kitBot = new KitBot();
+    private final AlLow alLow = new AlLow();
 
     /** Dashboard chooser for selecting the autonomous routine (logged through
      *  AdvantageKit so every log records which auto was selected). */
@@ -151,10 +151,10 @@ public class RobotContainer {
     public RobotContainer() {
         // Register the commands PathPlanner autos reference by name. The
         // names are part of the .auto files - do not rename one side only.
-        NamedCommands.registerCommand("EjectFirstPieceCommand", kitbot.ejectFirstPiece());
-        NamedCommands.registerCommand("EjectStackedPieceCommand", kitbot.ejectStackedPiece());
-        NamedCommands.registerCommand("RealignPieceCommand", kitbot.realignPiece());
-        NamedCommands.registerCommand("JogPieceCommand", kitbot.jogPiece());
+        NamedCommands.registerCommand("EjectFirstPieceCommand", kitBot.ejectFirstPiece());
+        NamedCommands.registerCommand("EjectStackedPieceCommand", kitBot.ejectStackedPiece());
+        NamedCommands.registerCommand("RealignPieceCommand", kitBot.realignPiece());
+        NamedCommands.registerCommand("JogPieceCommand", kitBot.jogPiece());
 
         // Auto chooser is populated with every auto in deploy/pathplanner/autos.
         // The default (AutoConstants.DEFAULT_AUTO_NAME) must name an auto that
@@ -181,7 +181,7 @@ public class RobotContainer {
         // (Tunables.init() runs in Robot before this container is built.)
 
         // All dashboard/NetworkTables publishing is centralized here.
-        dashboard = new Dashboard(swerve, kitbot, allow);
+        dashboard = new Dashboard(swerve, kitBot, alLow);
 
         configureBindings();
     }
@@ -224,14 +224,14 @@ public class RobotContainer {
         swerve.setDefaultCommand(
             swerve.applyRequest(() -> {
                 double scale = Tunables.teleopSpeedScale();
-                double maxSpeed = MaxSpeed * scale;
-                double maxAngularRate = MaxAngularRate * scale;
+                double scaledMaxSpeed = maxSpeed * scale;
+                double scaledMaxAngularRate = maxAngularRate * scale;
                 return drive
-                    .withDeadband(maxSpeed * DriveConstants.STICK_DEADBAND)
-                    .withRotationalDeadband(maxAngularRate * DriveConstants.STICK_DEADBAND)
-                    .withVelocityX(-driver_controller.getLeftY() * maxSpeed)  // Forward with negative Y (stick up)
-                    .withVelocityY(-driver_controller.getLeftX() * maxSpeed)  // Left with negative X
-                    .withRotationalRate(-driver_controller.getRightX() * maxAngularRate); // CCW with negative X (stick left)
+                    .withDeadband(scaledMaxSpeed * DriveConstants.STICK_DEADBAND)
+                    .withRotationalDeadband(scaledMaxAngularRate * DriveConstants.STICK_DEADBAND)
+                    .withVelocityX(-driverController.getLeftY() * scaledMaxSpeed)  // Forward with negative Y (stick up)
+                    .withVelocityY(-driverController.getLeftX() * scaledMaxSpeed)  // Left with negative X
+                    .withRotationalRate(-driverController.getRightX() * scaledMaxAngularRate); // CCW with negative X (stick left)
             })
         );
 
@@ -241,20 +241,20 @@ public class RobotContainer {
         // mode: SysId applies open-loop voltage steps to the drivetrain, and
         // neither belongs under a thumb during a match. Each SysId routine
         // should be run exactly once in a single log.
-        driver_controller.a().whileTrue(swerve.applyRequest(() -> brake));
-        driver_controller.b().and(testMode).whileTrue(swerve.applyRequest(() ->
-            point.withModuleDirection(new Rotation2d(-driver_controller.getLeftY(), -driver_controller.getLeftX()))));
-        driver_controller.back().and(driver_controller.y()).and(testMode).whileTrue(swerve.sysIdDynamic(Direction.kForward));
-        driver_controller.back().and(driver_controller.x()).and(testMode).whileTrue(swerve.sysIdDynamic(Direction.kReverse));
-        driver_controller.start().and(driver_controller.y()).and(testMode).whileTrue(swerve.sysIdQuasistatic(Direction.kForward));
-        driver_controller.start().and(driver_controller.x()).and(testMode).whileTrue(swerve.sysIdQuasistatic(Direction.kReverse));
+        driverController.a().whileTrue(swerve.applyRequest(() -> brake));
+        driverController.b().and(testMode).whileTrue(swerve.applyRequest(() ->
+            point.withModuleDirection(new Rotation2d(-driverController.getLeftY(), -driverController.getLeftX()))));
+        driverController.back().and(driverController.y()).and(testMode).whileTrue(swerve.sysIdDynamic(Direction.kForward));
+        driverController.back().and(driverController.x()).and(testMode).whileTrue(swerve.sysIdDynamic(Direction.kReverse));
+        driverController.start().and(driverController.y()).and(testMode).whileTrue(swerve.sysIdQuasistatic(Direction.kForward));
+        driverController.start().and(driverController.x()).and(testMode).whileTrue(swerve.sysIdQuasistatic(Direction.kReverse));
 
         // D-pad nudges in all eight directions from the POV angle, so a thumb
         // that lands on a diagonal still moves the robot (povUp() and the
         // other cardinal triggers are true only at exactly their own angle,
         // so bindings on those alone would ignore a 45-degree press).
-        new Trigger(() -> driver_controller.getHID().getPOV() >= 0).whileTrue(swerve.applyRequest(() -> {
-            double pov = Math.toRadians(driver_controller.getHID().getPOV()); // 0 = up, clockwise
+        new Trigger(() -> driverController.getHID().getPOV() >= 0).whileTrue(swerve.applyRequest(() -> {
+            double pov = Math.toRadians(driverController.getHID().getPOV()); // 0 = up, clockwise
             double speed = DriveConstants.NUDGE_SPEED_METERS_PER_SECOND;
             return forwardStraight.withVelocityX(speed * Math.cos(pov)).withVelocityY(-speed * Math.sin(pov));
         }));
@@ -266,10 +266,10 @@ public class RobotContainer {
         // supplying a heading (always the case with no camera mounted) it
         // also seeds the pose heading to the alliance's forward direction;
         // back + left bumper forces that seed.
-        driver_controller.leftBumper().and(driver_controller.back().negate())
+        driverController.leftBumper().and(driverController.back().negate())
             .onTrue(Commands.runOnce(() -> swerve.zeroDriverHeading(
                 DriverStation.isDisabled() && !swerve.getVision().hasFreshHeadingSeed())).ignoringDisable(true));
-        driver_controller.back().and(driver_controller.leftBumper())
+        driverController.back().and(driverController.leftBumper())
             .onTrue(Commands.runOnce(() -> swerve.zeroDriverHeading(true)).ignoringDisable(true));
 
         // Everything that needs a camera is bound only when one is configured.
@@ -280,9 +280,9 @@ public class RobotContainer {
             // Hold a trigger to align; release = sticks. Never a toggle: a
             // robot that keeps driving itself after the driver has let go is
             // the failure to avoid.
-            driver_controller.leftTrigger(DriveConstants.ALIGN_TRIGGER_THRESHOLD)
+            driverController.leftTrigger(DriveConstants.ALIGN_TRIGGER_THRESHOLD)
                 .whileTrue(alignTo(TagClass.REEF));
-            driver_controller.rightTrigger(DriveConstants.ALIGN_TRIGGER_THRESHOLD)
+            driverController.rightTrigger(DriveConstants.ALIGN_TRIGGER_THRESHOLD)
                 .whileTrue(alignTo(TagClass.CORAL_STATION));
 
             // Y: correct the pose heading from tag geometry. While enabled only
@@ -293,7 +293,7 @@ public class RobotContainer {
             // does nothing. The driver's frame is held in the raw gyro frame, so
             // "forward" on the stick does not move. (Not in Test mode, where
             // Back / Start + Y are the SysId bindings.)
-            driver_controller.y().and(testMode.negate())
+            driverController.y().and(testMode.negate())
                 .onTrue(Commands.runOnce(() -> swerve.getVision().requestHeadingReseed()).ignoringDisable(true));
 
             // Aligned: driver, steady light buzz -> call for the eject.
@@ -310,43 +310,43 @@ public class RobotContainer {
     // ==================================================================
     private void configureMechanismBindings() {
         // -------- KitBot roller --------
-        operator_controller.b().onTrue(kitbot.ejectFirstPiece());
-        operator_controller.y().onTrue(kitbot.ejectStackedPiece());
-        operator_controller.x().whileTrue(kitbot.realignPiece());
-        operator_controller.a().whileTrue(kitbot.jogPiece());
+        operatorController.b().onTrue(kitBot.ejectFirstPiece());
+        operatorController.y().onTrue(kitBot.ejectStackedPiece());
+        operatorController.x().whileTrue(kitBot.realignPiece());
+        operatorController.a().whileTrue(kitBot.jogPiece());
 
         // -------- AlLow presets --------
         // Each preset fires once; the Spark MAX latches the angle reference
         // and holds it from there, so no repeating command is needed.
 
         // Deploy to the intake angle with the rollers pulling in
-        operator_controller.povDown().onTrue(Commands.runOnce(() -> {
-            allow.setPivotAngle(AlLowConstants.PivotPresetAngles.INTAKE.getAngle());
-            allow.setRollerSpeed(AlLowConstants.ALLOW_ROLLER_INTAKE_SPEED);
-        }, allow));
+        operatorController.povDown().onTrue(Commands.runOnce(() -> {
+            alLow.setPivotAngle(AlLowConstants.PivotPresetAngles.INTAKE.getAngle());
+            alLow.setRollerSpeed(AlLowConstants.ALLOW_ROLLER_INTAKE_SPEED);
+        }, alLow));
 
         // Raise to the hold angle (piece clear of the ground), rollers stopped
-        operator_controller.povRight().onTrue(Commands.runOnce(() -> {
-            allow.setPivotAngle(AlLowConstants.PivotPresetAngles.HOLD.getAngle());
-            allow.stopRoller();
-        }, allow));
+        operatorController.povRight().onTrue(Commands.runOnce(() -> {
+            alLow.setPivotAngle(AlLowConstants.PivotPresetAngles.HOLD.getAngle());
+            alLow.stopRoller();
+        }, alLow));
 
         // Stow, rollers stopped
-        operator_controller.povUp().onTrue(Commands.runOnce(() -> {
-            allow.setPivotAngle(AlLowConstants.PivotPresetAngles.BASE.getAngle());
-            allow.stopRoller();
-        }, allow));
+        operatorController.povUp().onTrue(Commands.runOnce(() -> {
+            alLow.setPivotAngle(AlLowConstants.PivotPresetAngles.BASE.getAngle());
+            alLow.stopRoller();
+        }, alLow));
 
         // -------- AlLow rollers (hold to run; stop on release) --------
         // These require the subsystem, which pauses the manual default
         // command while held - the pivot keeps holding its angle on the
         // controller throughout.
-        operator_controller.rightTrigger(ControllerConstants.OPERATOR_TRIGGER_THRESHOLD).whileTrue(Commands.startEnd(
-            () -> allow.setRollerSpeed(AlLowConstants.ALLOW_ROLLER_EJECT_SPEED),
-            allow::stopRoller, allow));
-        operator_controller.leftTrigger(ControllerConstants.OPERATOR_TRIGGER_THRESHOLD).whileTrue(Commands.startEnd(
-            () -> allow.setRollerSpeed(AlLowConstants.ALLOW_ROLLER_INTAKE_SPEED),
-            allow::stopRoller, allow));
+        operatorController.rightTrigger(ControllerConstants.OPERATOR_TRIGGER_THRESHOLD).whileTrue(Commands.startEnd(
+            () -> alLow.setRollerSpeed(AlLowConstants.ALLOW_ROLLER_EJECT_SPEED),
+            alLow::stopRoller, alLow));
+        operatorController.leftTrigger(ControllerConstants.OPERATOR_TRIGGER_THRESHOLD).whileTrue(Commands.startEnd(
+            () -> alLow.setRollerSpeed(AlLowConstants.ALLOW_ROLLER_INTAKE_SPEED),
+            alLow::stopRoller, alLow));
 
         // Encoder zeroing: only while disabled, only after a hold of
         // ALLOW_ZERO_HOLD_SECONDS, with the arm at its stowed position.
@@ -354,16 +354,16 @@ public class RobotContainer {
         // limits and every preset by the arm's current angle
         // (resetPivotEncoder drops the closed loop first, so there is no
         // lunge - but the corrupted reference frame remains).
-        operator_controller.start().and(DriverStation::isDisabled)
+        operatorController.start().and(DriverStation::isDisabled)
             .debounce(AlLowConstants.ALLOW_ZERO_HOLD_SECONDS)
-            .onTrue(Commands.runOnce(allow::resetPivotEncoder, allow).ignoringDisable(true));
+            .onTrue(Commands.runOnce(alLow::resetPivotEncoder, alLow).ignoringDisable(true));
 
         // -------- Manual override (default command) --------
         // The subsystem applies the deadband and speed limit, and holds the
         // arm under closed loop when the stick is released - a centered
         // stick never fights an active position hold.
-        allow.setDefaultCommand(Commands.run(() ->
-            allow.manualPivotControl(-operator_controller.getRightY()), allow));
+        alLow.setDefaultCommand(Commands.run(() ->
+            alLow.manualPivotControl(-operatorController.getRightY()), alLow));
     }
 
     /** Returns the autonomous routine selected on the dashboard. */
@@ -435,13 +435,13 @@ public class RobotContainer {
      * can stop. The KitBot roller has nothing to hold.
      */
     public void enabledInit() {
-        allow.holdCurrentAngle();
+        alLow.holdCurrentAngle();
     }
 
     /** Called from Robot.disabledInit(): stop every mechanism output. */
     public void disabledInit() {
-        kitbot.stop();
-        allow.stopPivot();
-        allow.stopRoller();
+        kitBot.stop();
+        alLow.stopPivot();
+        alLow.stopRoller();
     }
 }

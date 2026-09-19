@@ -23,7 +23,7 @@ import frc.robot.subsystems.AlLow;
  */
 class AlLowSimTest {
 
-    private AlLow allow;
+    private AlLow alLow;
 
     @BeforeEach
     void setup() {
@@ -38,7 +38,7 @@ class AlLowSimTest {
         DriverStationSim.setEnabled(true);
         DriverStationSim.notifyNewData();
 
-        allow = new AlLow();
+        alLow = new AlLow();
     }
 
     @AfterEach
@@ -52,34 +52,34 @@ class AlLowSimTest {
     /** Runs one 20 ms robot loop's worth of subsystem + physics + clock updates. */
     private void runLoop() {
         DriverStationSim.notifyNewData();
-        allow.periodic();
-        allow.simulationPeriodic();
+        alLow.periodic();
+        alLow.simulationPeriodic();
         SimHooks.stepTiming(0.02);
     }
 
     @Test
     void closedLoopReachesAndHoldsAngle() {
-        assertEquals(0.0, allow.getPivotAngle(), 1.0, "Arm must start stowed");
+        assertEquals(0.0, alLow.getPivotAngle(), 1.0, "Arm must start stowed");
 
         double target = AlLowConstants.PivotPresetAngles.INTAKE.getAngle();
-        allow.setPivotAngle(target);
+        alLow.setPivotAngle(target);
 
         // 10 simulated seconds for the P-only loop to settle
         for (int i = 0; i < 500; i++) {
             runLoop();
         }
 
-        assertEquals(target, allow.getPivotAngle(), AlLowConstants.ALLOW_PIVOT_ALLOWED_ERROR,
+        assertEquals(target, alLow.getPivotAngle(), AlLowConstants.ALLOW_PIVOT_ALLOWED_ERROR,
             "Simulated closed loop should reach the commanded angle");
 
         // A centered manual stick (the default command's steady state) must
         // not disturb the hold (the failure this test guards against).
         for (int i = 0; i < 250; i++) {
-            allow.manualPivotControl(0.0);
+            alLow.manualPivotControl(0.0);
             runLoop();
         }
 
-        assertEquals(target, allow.getPivotAngle(), AlLowConstants.ALLOW_PIVOT_ALLOWED_ERROR,
+        assertEquals(target, alLow.getPivotAngle(), AlLowConstants.ALLOW_PIVOT_ALLOWED_ERROR,
             "Arm should keep holding the angle while the manual stick is centered");
     }
 }

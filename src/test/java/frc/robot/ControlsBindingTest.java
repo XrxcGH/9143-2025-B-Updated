@@ -38,8 +38,8 @@ import frc.robot.subsystems.Vision;
 class ControlsBindingTest {
 
     private RobotContainer container;
-    private AlLow allow;
-    private KitBot kitbot;
+    private AlLow alLow;
+    private KitBot kitBot;
     private XboxControllerSim driver;
     private XboxControllerSim operator;
 
@@ -54,8 +54,8 @@ class ControlsBindingTest {
         driver = new XboxControllerSim(ControllerConstants.DRIVER_CONTROLLER_PORT);
         neutral();
         container = new RobotContainer();
-        allow = (AlLow) field("allow");
-        kitbot = (KitBot) field("kitbot");
+        alLow = (AlLow) field("alLow");
+        kitBot = (KitBot) field("kitBot");
     }
 
     private void teleopEnabled() {
@@ -223,71 +223,71 @@ class ControlsBindingTest {
     void kitBotButtonsRunTheirCommands() {
         operator.setBButton(true);
         run(2);
-        assertEquals("EjectFirstPiece", kitbot.getCurrentCommand().getName());
+        assertEquals("EjectFirstPiece", kitBot.getCurrentCommand().getName());
         neutral();
         run(2);
-        assertEquals("EjectFirstPiece", kitbot.getCurrentCommand().getName(), "a timed eject outlives the press");
+        assertEquals("EjectFirstPiece", kitBot.getCurrentCommand().getName(), "a timed eject outlives the press");
 
         operator.setYButton(true);
         run(2);
-        assertEquals("EjectStackedPiece", kitbot.getCurrentCommand().getName());
+        assertEquals("EjectStackedPiece", kitBot.getCurrentCommand().getName());
         neutral();
         operator.setXButton(true);
         run(2);
-        assertEquals("RealignPiece", kitbot.getCurrentCommand().getName());
+        assertEquals("RealignPiece", kitBot.getCurrentCommand().getName());
         neutral();
         run(2);
-        assertEquals(null, kitbot.getCurrentCommand(), "re-align is a hold");
+        assertEquals(null, kitBot.getCurrentCommand(), "re-align is a hold");
         operator.setAButton(true);
         run(2);
-        assertEquals("JogPiece", kitbot.getCurrentCommand().getName());
+        assertEquals("JogPiece", kitBot.getCurrentCommand().getName());
         neutral();
         run(2);
-        assertEquals(null, kitbot.getCurrentCommand(), "jog is a hold");
+        assertEquals(null, kitBot.getCurrentCommand(), "jog is a hold");
     }
 
     @Test
     void alLowPresetsSetTheirAngles() {
         operator.setPOV(180);
         run(2);
-        assertEquals(AlLowConstants.PivotPresetAngles.INTAKE.getAngle(), allow.getTargetAngle(), 1e-9, "D-pad down = intake");
+        assertEquals(AlLowConstants.PivotPresetAngles.INTAKE.getAngle(), alLow.getTargetAngle(), 1e-9, "D-pad down = intake");
         operator.setPOV(90);
         run(2);
-        assertEquals(AlLowConstants.PivotPresetAngles.HOLD.getAngle(), allow.getTargetAngle(), 1e-9, "D-pad right = hold");
+        assertEquals(AlLowConstants.PivotPresetAngles.HOLD.getAngle(), alLow.getTargetAngle(), 1e-9, "D-pad right = hold");
         operator.setPOV(0);
         run(2);
-        assertEquals(AlLowConstants.PivotPresetAngles.BASE.getAngle(), allow.getTargetAngle(), 1e-9, "D-pad up = stow");
-        assertTrue(allow.isHoldingPosition(), "a preset leaves the closed loop holding");
+        assertEquals(AlLowConstants.PivotPresetAngles.BASE.getAngle(), alLow.getTargetAngle(), 1e-9, "D-pad up = stow");
+        assertTrue(alLow.isHoldingPosition(), "a preset leaves the closed loop holding");
     }
 
     @Test
     void alLowRollerTriggersAreHolds() {
-        Command manual = allow.getDefaultCommand();
+        Command manual = alLow.getDefaultCommand();
         operator.setLeftTriggerAxis(1.0);
         run(2);
-        assertNotEquals(manual, allow.getCurrentCommand(), "LT runs the intake rollers");
+        assertNotEquals(manual, alLow.getCurrentCommand(), "LT runs the intake rollers");
         neutral();
         run(2);
-        assertEquals(manual, allow.getCurrentCommand());
+        assertEquals(manual, alLow.getCurrentCommand());
         operator.setRightTriggerAxis(1.0);
         run(2);
-        assertNotEquals(manual, allow.getCurrentCommand(), "RT runs the eject");
+        assertNotEquals(manual, alLow.getCurrentCommand(), "RT runs the eject");
         neutral();
         run(2);
-        assertEquals(manual, allow.getCurrentCommand());
+        assertEquals(manual, alLow.getCurrentCommand());
     }
 
     @Test
     void manualStickTakesOverAndReleaseHolds() {
-        allow.setPivotAngle(AlLowConstants.PivotPresetAngles.HOLD.getAngle());
+        alLow.setPivotAngle(AlLowConstants.PivotPresetAngles.HOLD.getAngle());
         operator.setRightY(-1.0); // forward on the stick = deploy
         run(3);
-        assertTrue(allow.isInManualMode(), "stick outside the deadband = manual");
-        assertFalse(allow.isHoldingPosition());
+        assertTrue(alLow.isInManualMode(), "stick outside the deadband = manual");
+        assertFalse(alLow.isHoldingPosition());
         operator.setRightY(0.0);
         run(3);
-        assertFalse(allow.isInManualMode());
-        assertTrue(allow.isHoldingPosition(), "releasing the stick hands back to the closed-loop hold");
+        assertFalse(alLow.isInManualMode());
+        assertTrue(alLow.isHoldingPosition(), "releasing the stick hands back to the closed-loop hold");
     }
 
     /** The encoder zero moves every preset and both soft limits: disabled only, and only after an ALLOW_ZERO_HOLD_SECONDS hold. */
@@ -295,32 +295,32 @@ class ControlsBindingTest {
     void pivotZeroNeedsDisabledAndAFullHold() throws InterruptedException {
         double marker = AlLowConstants.PivotPresetAngles.HOLD.getAngle();
 
-        allow.setPivotAngle(marker);
+        alLow.setPivotAngle(marker);
         operator.setStartButton(true);
         runFor(AlLowConstants.ALLOW_ZERO_HOLD_SECONDS + 0.5);
-        assertEquals(marker, allow.getTargetAngle(), 1e-9, "Start does nothing while ENABLED, however long it is held");
+        assertEquals(marker, alLow.getTargetAngle(), 1e-9, "Start does nothing while ENABLED, however long it is held");
         neutral();
         run(2);
 
         DriverStationSim.setEnabled(false);
         DriverStationSim.notifyNewData();
         run(2);
-        allow.setPivotAngle(marker);
+        alLow.setPivotAngle(marker);
         operator.setStartButton(true);
         runFor(AlLowConstants.ALLOW_ZERO_HOLD_SECONDS * 0.3);
-        assertEquals(marker, allow.getTargetAngle(), 1e-9, "a brushed Start does nothing");
+        assertEquals(marker, alLow.getTargetAngle(), 1e-9, "a brushed Start does nothing");
         runFor(AlLowConstants.ALLOW_ZERO_HOLD_SECONDS + 0.2);
-        assertEquals(0.0, allow.getTargetAngle(), 1e-9, "Start held for the full hold time while disabled zeroes the pivot");
-        assertFalse(allow.isHoldingPosition(), "zeroing drops the closed loop first");
+        assertEquals(0.0, alLow.getTargetAngle(), 1e-9, "Start held for the full hold time while disabled zeroes the pivot");
+        assertFalse(alLow.isHoldingPosition(), "zeroing drops the closed loop first");
     }
 
     /** Disabling drops the closed loop; enabling must pick the arm up again where it is. */
     @Test
     void enablingHoldsTheArmWhereItIs() {
         container.disabledInit();
-        assertFalse(allow.isHoldingPosition());
+        assertFalse(alLow.isHoldingPosition());
         container.enabledInit();
-        assertTrue(allow.isHoldingPosition(), "the arm is held on enable without the operator touching anything");
-        assertEquals(allow.getPivotAngle(), allow.getTargetAngle(), 0.5, "at the angle it is resting at");
+        assertTrue(alLow.isHoldingPosition(), "the arm is held on enable without the operator touching anything");
+        assertEquals(alLow.getPivotAngle(), alLow.getTargetAngle(), 0.5, "at the angle it is resting at");
     }
 }

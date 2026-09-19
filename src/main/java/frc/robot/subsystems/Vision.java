@@ -454,7 +454,7 @@ public class Vision extends SubsystemBase {
      * when it begins in the same loop this one ended in (the driver rolling
      * from one align trigger onto the other).
      */
-    public void toggleTracking(boolean enabled) {
+    public void setTrackingEnabled(boolean enabled) {
         trackingEnabled = enabled;
         if (!enabled) {
             releaseLatch();
@@ -465,7 +465,7 @@ public class Vision extends SubsystemBase {
 
     /**
      * Whether AprilTag tracking is enabled. Intentionally unused: kept as
-     * the getter paired with toggleTracking() for dashboards and tests
+     * the getter paired with setTrackingEnabled() for dashboards and tests
      * (Swerve keeps its own copy of this state for the align bindings).
      */
     public boolean isTrackingEnabled() {
@@ -910,7 +910,7 @@ public class Vision extends SubsystemBase {
      * Intentionally unused (with its getter below): fusion defaults
      * to on; call or temporarily bind this in test sessions only.
      */
-    public void enablePositionTracking(boolean enabled) {
+    public void setPositionTrackingEnabled(boolean enabled) {
         positionTrackingEnabled = enabled;
     }
 

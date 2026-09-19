@@ -23,7 +23,7 @@ import frc.robot.subsystems.AlLow;
  */
 class AlLowManualReleaseSimTest {
 
-    private AlLow allow;
+    private AlLow alLow;
 
     @BeforeEach
     void setup() {
@@ -38,7 +38,7 @@ class AlLowManualReleaseSimTest {
         DriverStationSim.setEnabled(true);
         DriverStationSim.notifyNewData();
 
-        allow = new AlLow();
+        alLow = new AlLow();
     }
 
     @AfterEach
@@ -52,8 +52,8 @@ class AlLowManualReleaseSimTest {
     /** Runs one 20 ms robot loop's worth of subsystem + physics + clock updates. */
     private void runLoop() {
         DriverStationSim.notifyNewData();
-        allow.periodic();
-        allow.simulationPeriodic();
+        alLow.periodic();
+        alLow.simulationPeriodic();
         SimHooks.stepTiming(0.02);
     }
 
@@ -68,28 +68,28 @@ class AlLowManualReleaseSimTest {
         // Deploy under manual control for 0.2 simulated seconds: long enough to
         // be moving, short enough to be nowhere near the forward soft limit
         for (int i = 0; i < 10; i++) {
-            allow.manualPivotControl(1.0);
+            alLow.manualPivotControl(1.0);
             runLoop();
         }
-        assertTrue(allow.isInManualMode());
-        double angleAtRelease = allow.getPivotAngle();
-        double velocityAtRelease = allow.getPivotVelocity();
+        assertTrue(alLow.isInManualMode());
+        double angleAtRelease = alLow.getPivotAngle();
+        double velocityAtRelease = alLow.getPivotVelocity();
         assertTrue(velocityAtRelease > 0.0, "the arm is still deploying when the stick is released");
 
-        allow.manualPivotControl(0.0);
-        double target = allow.getTargetAngle();
-        assertTrue(allow.isHoldingPosition(), "release hands over to the closed loop at once");
+        alLow.manualPivotControl(0.0);
+        double target = alLow.getTargetAngle();
+        assertTrue(alLow.isHoldingPosition(), "release hands over to the closed loop at once");
         assertTrue(target >= angleAtRelease, "the hold target is ahead of a deploying arm, never behind it");
         assertEquals(angleAtRelease
                 + velocityAtRelease * AlLowConstants.ALLOW_MANUAL_RELEASE_STOP_SECONDS / 2.0,
             target, 1.0, "measured angle plus the stopping distance (clamped to the travel limits)");
 
         for (int i = 0; i < 250; i++) {
-            allow.manualPivotControl(0.0);
+            alLow.manualPivotControl(0.0);
             runLoop();
         }
-        assertEquals(target, allow.getTargetAngle(), 1e-9, "the target is set once on release");
-        assertEquals(target, allow.getPivotAngle(), AlLowConstants.ALLOW_PIVOT_ALLOWED_ERROR,
+        assertEquals(target, alLow.getTargetAngle(), 1e-9, "the target is set once on release");
+        assertEquals(target, alLow.getPivotAngle(), AlLowConstants.ALLOW_PIVOT_ALLOWED_ERROR,
             "and the arm settles on it");
     }
 }

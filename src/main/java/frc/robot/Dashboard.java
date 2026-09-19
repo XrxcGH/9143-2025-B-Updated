@@ -58,8 +58,8 @@ import frc.robot.util.Tunables;
  */
 public class Dashboard {
     private final Swerve swerve;
-    private final KitBot kitbot;
-    private final AlLow allow;
+    private final KitBot kitBot;
+    private final AlLow alLow;
 
     /** Field widget data: robot pose (and any objects added later, for example trajectories). */
     private final Field2d field = new Field2d();
@@ -85,9 +85,9 @@ public class Dashboard {
     // (stowed) points straight up; positive angles swing the arm outward.
     // Its size and style are in DashboardConstants; the arm's length is
     // AlLowConstants.ALLOW_ARM_LENGTH_METERS, the one the simulation uses.
-    private final Mechanism2d allowMech = new Mechanism2d(
+    private final Mechanism2d alLowMech = new Mechanism2d(
         DashboardConstants.ALLOW_MECHANISM_WIDTH, DashboardConstants.ALLOW_MECHANISM_HEIGHT);
-    private final MechanismLigament2d allowArmLigament;
+    private final MechanismLigament2d alLowArmLigament;
 
     // 3D component pose for AdvantageScope's 3D field view (one component:
     // the arm); the pivot offsets are in DashboardConstants.
@@ -103,14 +103,14 @@ public class Dashboard {
      * subsystems exist. (The auto chooser is a LoggedDashboardChooser that
      * publishes itself - see RobotContainer.)
      */
-    public Dashboard(Swerve swerve, KitBot kitbot, AlLow allow) {
+    public Dashboard(Swerve swerve, KitBot kitBot, AlLow alLow) {
         this.swerve = swerve;
-        this.kitbot = kitbot;
-        this.allow = allow;
+        this.kitBot = kitBot;
+        this.alLow = alLow;
 
         // --- AlLow arm Mechanism2d (Glass / AdvantageScope) ---
         // 90 deg: the stowed arm (0 deg) draws straight up
-        allowArmLigament = allowMech.getRoot("AlLow",
+        alLowArmLigament = alLowMech.getRoot("AlLow",
                 DashboardConstants.ALLOW_MECHANISM_ROOT_X, DashboardConstants.ALLOW_MECHANISM_ROOT_Y)
             .append(new MechanismLigament2d("Arm", AlLowConstants.ALLOW_ARM_LENGTH_METERS, 90,
                 DashboardConstants.ALLOW_ARM_LINE_WIDTH, new Color8Bit(DashboardConstants.ALLOW_ARM_COLOR)));
@@ -119,12 +119,12 @@ public class Dashboard {
         // Field widget: realtime robot location on the field drawing
         SmartDashboard.putData("Field", field);
         // AlLow arm schematic (viewable in Glass and AdvantageScope)
-        SmartDashboard.putData("AlLow Mechanism", allowMech);
+        SmartDashboard.putData("AlLow Mechanism", alLowMech);
         // Command scheduler view for diagnostics
         SmartDashboard.putData("Command Scheduler", CommandScheduler.getInstance());
         // Subsystem widgets (show default/current command) for diagnostics
-        SmartDashboard.putData("AlLow Subsystem", allow);
-        SmartDashboard.putData("KitBot Subsystem", kitbot);
+        SmartDashboard.putData("AlLow Subsystem", alLow);
+        SmartDashboard.putData("KitBot Subsystem", kitBot);
 
         // --- Pre-match utility button (Command widget) ---
         // ignoringDisable lets the pit crew zero the arm without enabling -
@@ -139,7 +139,7 @@ public class Dashboard {
         SmartDashboard.putData("Zero AlLow Pivot",
             Commands.runOnce(() -> {
                 if (DriverStation.isDisabled()) {
-                    allow.resetPivotEncoder();
+                    alLow.resetPivotEncoder();
                 }
             }).ignoringDisable(true).withName("Zero AlLow Pivot"));
 
@@ -217,8 +217,8 @@ public class Dashboard {
         // --- AlLow visualization ---
         // Mechanism2d convention: 0 deg (stowed) draws straight up, deploy
         // angles swing outward.
-        double armAngleDeg = allow.getPivotAngle();
-        allowArmLigament.setAngle(90.0 - armAngleDeg);
+        double armAngleDeg = alLow.getPivotAngle();
+        alLowArmLigament.setAngle(90.0 - armAngleDeg);
 
         // 3D component pose for AdvantageScope (robot-relative: X forward,
         // Y left, Z up). Arm pitches about the Y axis; the sign/zero must
@@ -239,8 +239,8 @@ public class Dashboard {
         }
         Logger.recordOutput("RobotState/ComponentPoses", Pose3d.struct, componentPoses);
         Logger.recordOutput("AlLow/AngleDegrees", armAngleDeg);
-        Logger.recordOutput("AlLow/TargetDegrees", allow.getTargetAngle());
-        Logger.recordOutput("KitBot/RollerOutput", kitbot.getRollerOutput());
+        Logger.recordOutput("AlLow/TargetDegrees", alLow.getTargetAngle());
+        Logger.recordOutput("KitBot/RollerOutput", kitBot.getRollerOutput());
         // (Vision/BestTag and Vision/AlignmentTag are logged in the Vision
         // section below, beside the dashboard values they mirror.)
 
@@ -251,19 +251,19 @@ public class Dashboard {
             RobotController.getCANStatus().percentBusUtilization);
 
         // --- AlLow ---
-        SmartDashboard.putNumber("AlLow/Angle", allow.getPivotAngle());
-        SmartDashboard.putNumber("AlLow/Target", allow.getTargetAngle());
-        SmartDashboard.putBoolean("AlLow/At Target", allow.isAtTargetAngle());
-        SmartDashboard.putBoolean("AlLow/Manual Mode", allow.isInManualMode());
-        SmartDashboard.putBoolean("AlLow/Holding", allow.isHoldingPosition());
-        SmartDashboard.putNumber("AlLow/Pivot Current", allow.getPivotCurrent());
-        SmartDashboard.putNumber("AlLow/Roller Current", allow.getRollerCurrent());
-        SmartDashboard.putNumber("AlLow/Pivot Output", allow.getPivotOutput());
-        SmartDashboard.putNumber("AlLow/Roller Output", allow.getRollerOutput());
+        SmartDashboard.putNumber("AlLow/Angle", alLow.getPivotAngle());
+        SmartDashboard.putNumber("AlLow/Target", alLow.getTargetAngle());
+        SmartDashboard.putBoolean("AlLow/At Target", alLow.isAtTargetAngle());
+        SmartDashboard.putBoolean("AlLow/Manual Mode", alLow.isInManualMode());
+        SmartDashboard.putBoolean("AlLow/Holding", alLow.isHoldingPosition());
+        SmartDashboard.putNumber("AlLow/Pivot Current", alLow.getPivotCurrent());
+        SmartDashboard.putNumber("AlLow/Roller Current", alLow.getRollerCurrent());
+        SmartDashboard.putNumber("AlLow/Pivot Output", alLow.getPivotOutput());
+        SmartDashboard.putNumber("AlLow/Roller Output", alLow.getRollerOutput());
 
         // --- KitBot ---
-        SmartDashboard.putNumber("KitBot/Roller Current", kitbot.getRollerCurrent());
-        SmartDashboard.putNumber("KitBot/Roller Output", kitbot.getRollerOutput());
+        SmartDashboard.putNumber("KitBot/Roller Current", kitBot.getRollerCurrent());
+        SmartDashboard.putNumber("KitBot/Roller Output", kitBot.getRollerOutput());
 
         // --- Vision (every value reads "nothing seen" until a Limelight is configured) ---
         // What the cameras see, unfiltered - the same tags their streams
